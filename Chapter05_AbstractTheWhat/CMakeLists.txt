@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(Chapter5ImagingCapabilities LANGUAGES CXX)
+
+add_executable(chapter5_imaging_example examples/main.cpp)
+target_compile_features(chapter5_imaging_example PRIVATE cxx_std_20)
+target_include_directories(chapter5_imaging_example PRIVATE include)

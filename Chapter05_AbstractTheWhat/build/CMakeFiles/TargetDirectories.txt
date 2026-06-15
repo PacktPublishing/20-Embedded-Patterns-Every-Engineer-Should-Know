@@ -1,0 +1,3 @@
+/home/mark/20-Embedded-Patterns-Every-Engineer-Should-Know/Chapter05_AbstractTheWhat/build/CMakeFiles/chapter5_imaging_example.dir
+/home/mark/20-Embedded-Patterns-Every-Engineer-Should-Know/Chapter05_AbstractTheWhat/build/CMakeFiles/edit_cache.dir
+/home/mark/20-Embedded-Patterns-Every-Engineer-Should-Know/Chapter05_AbstractTheWhat/build/CMakeFiles/rebuild_cache.dir
