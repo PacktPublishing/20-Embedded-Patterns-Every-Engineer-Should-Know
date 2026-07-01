@@ -81,33 +81,128 @@ static bool need_value(int i, int argc, const char* opt)
 
 static bool parse_args(int argc, char** argv, Options& opt)
 {
+    auto consume_value = [&](int& i, std::string_view option) -> const char*
+    {
+        if (!need_value(i, argc, option.data()))
+        {
+            return nullptr;
+        }
+        return argv[++i];
+    };
+
     for (int i = 1; i < argc; ++i)
     {
         const std::string_view a(argv[i]);
-        if (a == "-h" || a == "--help") { usage(); std::exit(0); }
-        else if (a == "--stdout") opt.use_stdout = true;
-        else if (a == "--file" && need_value(i, argc, argv[i])) opt.file = argv[++i];
-        else if (a == "--uart" && need_value(i, argc, argv[i])) opt.uart_device = argv[++i];
-        else if (a == "--udp" && need_value(i, argc, argv[i]))
+
+        if (a == "-h" || a == "--help")
         {
+            usage();
+            std::exit(0);
+        }
+        else if (a == "--stdout")
+        {
+            opt.use_stdout = true;
+        }
+        else if (a == "--file")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            opt.file = value;
+        }
+        else if (a == "--uart")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            opt.uart_device = value;
+        }
+        else if (a == "--udp")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+
             nmea_sim::UdpEndpoint ep{};
-            if (!nmea_sim::parse_udp_endpoint(argv[++i], ep)) return false;
+            if (!nmea_sim::parse_udp_endpoint(value, ep)) return false;
             opt.udp = ep;
         }
-        else if (a == "--baud" && need_value(i, argc, argv[i])) opt.uart_baud = std::atoi(argv[++i]);
-        else if (a == "--temp-hz" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.temp_hz)) return false;
-        else if (a == "--pressure-hz" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.pressure_hz)) return false;
-        else if (a == "--humidity-hz" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.humidity_hz)) return false;
-        else if (a == "--position-hz" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.position_hz)) return false;
-        else if (a == "--wind-hz" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.wind_hz)) return false;
-        else if (a == "--gen" && need_value(i, argc, argv[i]) && !parse_gen(argv[++i], opt.gen)) return false;
-        else if (a == "--seed" && need_value(i, argc, argv[i]) && !parse_u32(argv[++i], opt.seed)) return false;
-        else if (a == "--duration" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.duration_sec)) return false;
-        else if (a == "--log-every" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.log_every_sec)) return false;
-        else if (a == "--bad-checksum-percent" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.bad_checksum_percent)) return false;
-        else if (a == "--truncated-percent" && need_value(i, argc, argv[i]) && !parse_double(argv[++i], opt.truncated_percent)) return false;
-        else { std::cerr << "Unknown or invalid option: " << a << "\n"; return false; }
+        else if (a == "--baud")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            opt.uart_baud = std::atoi(value);
+        }
+        else if (a == "--temp-hz")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.temp_hz)) return false;
+        }
+        else if (a == "--pressure-hz")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.pressure_hz)) return false;
+        }
+        else if (a == "--humidity-hz")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.humidity_hz)) return false;
+        }
+        else if (a == "--position-hz")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.position_hz)) return false;
+        }
+        else if (a == "--wind-hz")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.wind_hz)) return false;
+        }
+        else if (a == "--gen")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_gen(value, opt.gen)) return false;
+        }
+        else if (a == "--seed")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_u32(value, opt.seed)) return false;
+        }
+        else if (a == "--duration")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.duration_sec)) return false;
+        }
+        else if (a == "--log-every")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.log_every_sec)) return false;
+        }
+        else if (a == "--bad-checksum-percent")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.bad_checksum_percent)) return false;
+        }
+        else if (a == "--truncated-percent")
+        {
+            const char* value = consume_value(i, a);
+            if (!value) return false;
+            if (!parse_double(value, opt.truncated_percent)) return false;
+        }
+        else
+        {
+            std::cerr << "Unknown or invalid option: " << a << "\n";
+            return false;
+        }
     }
+
     return true;
 }
 
