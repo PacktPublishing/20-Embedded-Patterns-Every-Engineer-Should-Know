@@ -8,6 +8,9 @@
 #include <span>
 #include <type_traits>
 
+namespace pbook
+{
+
 /**
  * @brief Immutable, non-owning view of a contiguous byte sequence.
  *
@@ -20,8 +23,8 @@
  *    for the lifetime of the ImmutableByteView.
  *
  * Thread safety:
- *  - ImmutableByteView itself is trivially copyable and thread-safe.
- *  - The underlying memory is not synchronized.
+ *  - ImmutableByteView is cheap to copy.
+ *  - It provides no synchronization for the underlying memory.
  */
 using ImmutableByteView = std::span<const std::byte>;
 
@@ -44,3 +47,5 @@ inline ImmutableByteView asBytes(const std::array<T, N>& a) noexcept
 
     return std::as_bytes(std::span{a});
 }
+
+} // end of namespace

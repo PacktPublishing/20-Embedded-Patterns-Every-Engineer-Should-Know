@@ -10,6 +10,9 @@
 #include <span>
 #include <type_traits>
 
+namespace pbook
+{
+
 /**
  * @brief Mutable, non-owning view of a contiguous byte sequence.
  *
@@ -40,3 +43,5 @@ inline MutableByteView asWritableBytes(std::array<T, N>& a) noexcept
 
     return std::as_writable_bytes(std::span{a});
 }
+
+} // end namespace

@@ -15,10 +15,16 @@ add_library(Common STATIC
     include/NMEAInsertionStream.h
     include/NMEATokenizer.h
     include/Status.h
+    include/EpollReactor.h
+    include/UartLineReceiver.h
+    include/UdpDatagramReceiver.h
 
     src/NMEAExtractionStream.cpp
     src/NMEAInsertionStream.cpp
     src/NMEATokenizer.cpp
+    src/EpollReactor.cpp
+    src/UartLineReceiver.cpp
+    src/UdpDatagramReceiver.cpp
 )
 
 target_include_directories(Common
@@ -26,7 +32,7 @@ target_include_directories(Common
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_features(Common PUBLIC cxx_std_17)
+target_compile_features(Common PUBLIC cxx_std_20)
 
 set_target_properties(Common PROPERTIES
     FOLDER "Common"
