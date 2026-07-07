@@ -28,7 +28,7 @@ cleanup()
 
 trap cleanup EXIT INT TERM
 
-nmea_sim --udp "${UDP_TARGET}" --temp-hz 1 --pressure-hz 1 &
-nmea_sim --uart "${UART_DEVICE}" --temp-hz 1 &
+nmea_sim --udp "${UDP_TARGET}" --temp-hz 0.5 --pressure-hz 0.2 &
+nmea_sim --uart "${UART_DEVICE}" --temp-hz 0.25 &
 
 wait
