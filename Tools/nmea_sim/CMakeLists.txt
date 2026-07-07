@@ -26,10 +26,21 @@ target_include_directories(nmea_sim
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_compile_features(nmea_sim PRIVATE cxx_std_17)
+target_compile_features(nmea_sim
+    PRIVATE
+        cxx_std_20
+)
 
 if (MSVC)
     target_compile_options(nmea_sim PRIVATE /W4)
 else()
     target_compile_options(nmea_sim PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+set(NMEA_SIM_INSTALL_BINDIR "$ENV{HOME}/bin"
+    CACHE PATH "Install directory for nmea_sim"
+)
+
+install(TARGETS nmea_sim
+    RUNTIME DESTINATION "${NMEA_SIM_INSTALL_BINDIR}"
+)
