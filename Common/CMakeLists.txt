@@ -18,6 +18,8 @@ add_library(Common STATIC
     include/EpollReactor.h
     include/UartLineReceiver.h
     include/UdpDatagramReceiver.h
+    include/SignalFdSource.h
+    include/TimerFdSource.h
 
     src/NMEAExtractionStream.cpp
     src/NMEAInsertionStream.cpp
@@ -25,6 +27,8 @@ add_library(Common STATIC
     src/EpollReactor.cpp
     src/UartLineReceiver.cpp
     src/UdpDatagramReceiver.cpp
+    src/SignalFdSource.cpp
+    src/TimerFdSource.cpp
 )
 
 target_include_directories(Common
