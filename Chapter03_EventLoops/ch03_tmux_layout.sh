@@ -2,8 +2,13 @@
 set -euo pipefail
 
 SESSION="${1:-ch03-readiness}"
+
 UDP_PORT="${UDP_PORT:-9000}"
 STATS_EVERY="${STATS_EVERY:-5}"
+START_DELAY="${START_DELAY:-10}"
+
+MIN_COLS="${MIN_COLS:-90}"
+MIN_LINES="${MIN_LINES:-35}"
 
 if ! command -v tmux >/dev/null 2>&1; then
     echo "tmux is not installed."
@@ -18,23 +23,29 @@ if ! command -v socat >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v nmea_sim >/dev/null 2>&1; then
+    echo "nmea_sim was not found on PATH."
+    echo "Build/install nmea_sim or add it to PATH."
+    exit 1
+fi
+
 if ! command -v ch03_nmea_monitor >/dev/null 2>&1; then
     echo "ch03_nmea_monitor was not found on PATH."
-    echo "Build it and copy it to your bin directory, or add its build directory to PATH."
+    echo "Build/install ch03_nmea_monitor or add it to PATH."
     exit 1
 fi
 
 if ! command -v run_nmea_sources.sh >/dev/null 2>&1; then
     echo "run_nmea_sources.sh was not found on PATH."
-    echo "Copy it to your bin directory, or add its directory to PATH."
+    echo "Install it to \$HOME/bin or add its directory to PATH."
     exit 1
 fi
 
 COLS="$(tput cols)"
 LINES="$(tput lines)"
 
-if (( COLS < 90 || LINES < 35 )); then
-    echo "This demo layout works best with a terminal at least 100 columns x 35 lines."
+if (( COLS < MIN_COLS || LINES < MIN_LINES )); then
+    echo "This demo layout works best with a terminal at least ${MIN_COLS} columns x ${MIN_LINES} lines."
     echo "Current size: ${COLS} columns x ${LINES} lines"
     echo
     echo "Resize the terminal and run the script again."
@@ -60,16 +71,18 @@ tmux split-window -v -t "$SESSION:0.1"
 
 tmux select-layout -t "$SESSION:0" even-vertical
 
-# Keep setup panes small and leave the monitor pane larger.
+# Keep setup panes smaller and leave the monitor pane larger.
 tmux resize-pane -t "$SESSION:0.0" -y 7 2>/dev/null || true
 tmux resize-pane -t "$SESSION:0.1" -y 11 2>/dev/null || true
 
+# Show pane titles.
+tmux set-option -t "$SESSION" pane-border-status top >/dev/null
 tmux select-pane -t "$SESSION:0.0" -T "socat"
 tmux select-pane -t "$SESSION:0.1" -T "nmea_sim"
 tmux select-pane -t "$SESSION:0.2" -T "nmea_monitor"
 
-# Start socat in the top pane. Its output is displayed in the pane and also
-# written to a temporary log so this script can discover the PTY names.
+# Start socat in the top pane. Its output is shown in the pane and also saved
+# so this script can discover the PTY names.
 tmux send-keys -t "$SESSION:0.0" \
     "cd \"\$HOME\" && clear && socat -d -d pty,raw,echo=0 pty,raw,echo=0 2>&1 | tee -a \"$SOCAT_LOG\"" C-m
 
@@ -102,15 +115,13 @@ if [[ -z "$PTY_A" || -z "$PTY_B" ]]; then
     exit 1
 fi
 
-# Start the monitor first so it is listening before the sources send data.
+# Start the monitor first so it is listening before sources send data.
 tmux send-keys -t "$SESSION:0.2" \
     "cd \"\$HOME\" && clear && ch03_nmea_monitor --udp-port \"$UDP_PORT\" --uart \"$PTY_A\" --stats-every \"$STATS_EVERY\"" C-m
 
-sleep 0.5
-
-# Start the simulated sources.
+# Delay only the data sources so the layout is visible before the action starts.
 tmux send-keys -t "$SESSION:0.1" \
-    "cd \"\$HOME\" && clear && run_nmea_sources.sh \"$PTY_B\"" C-m
+    "cd \"\$HOME\" && clear && echo \"Starting NMEA sources in ${START_DELAY} seconds...\" && echo \"UDP port: ${UDP_PORT}\" && echo \"UART PTY:  ${PTY_B}\" && sleep \"${START_DELAY}\" && run_nmea_sources.sh \"$PTY_B\"" C-m
 
 tmux select-pane -t "$SESSION:0.2"
 tmux attach-session -t "$SESSION"
