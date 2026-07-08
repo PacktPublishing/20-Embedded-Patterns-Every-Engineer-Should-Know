@@ -38,16 +38,16 @@ set(CH03_RUN_SOURCES_SCRIPT
     "${CMAKE_CURRENT_LIST_DIR}/run_nmea_sources.sh"
 )
 
-set(CH03_TMUX_LAYOUT_SCRIPT
-    "${CMAKE_CURRENT_LIST_DIR}/ch03_tmux_layout.sh"
+set(CH03_READINESS_DEMO_SCRIPT
+    "${CMAKE_CURRENT_LIST_DIR}/ch03_readiness_demo.sh"
 )
 
 if(NOT EXISTS "${CH03_RUN_SOURCES_SCRIPT}")
     message(FATAL_ERROR "Missing script: ${CH03_RUN_SOURCES_SCRIPT}")
 endif()
 
-if(NOT EXISTS "${CH03_TMUX_LAYOUT_SCRIPT}")
-    message(FATAL_ERROR "Missing script: ${CH03_TMUX_LAYOUT_SCRIPT}")
+if(NOT EXISTS "${CH03_READINESS_DEMO_SCRIPT}")
+    message(FATAL_ERROR "Missing script: ${CH03_READINESS_DEMO_SCRIPT}")
 endif()
 
 install(TARGETS ch03_nmea_monitor
@@ -56,6 +56,6 @@ install(TARGETS ch03_nmea_monitor
 
 install(PROGRAMS
     "${CH03_RUN_SOURCES_SCRIPT}"
-    "${CH03_TMUX_LAYOUT_SCRIPT}"
+    "${CH03_READINESS_DEMO_SCRIPT}"
     DESTINATION "${CH03_INSTALL_BINDIR}"
 )
