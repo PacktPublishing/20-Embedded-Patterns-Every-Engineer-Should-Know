@@ -50,7 +50,16 @@ add_executable(CommonNmea_Tests
     tests/NmeaTestMain.cpp
 )
 
+add_executable(BoundedQueueTest
+    tests/BoundedQueueMain.cpp
+)
+
 target_link_libraries(CommonNmea_Tests
+    PRIVATE
+        Common
+)
+
+target_link_libraries(BoundedQueueTest
     PRIVATE
         Common
 )
