@@ -8,6 +8,7 @@ project(CommonLibs LANGUAGES CXX)
 
 add_library(Common STATIC
     # Public headers (explicit)
+    include/BoundedQueue.h
     include/ImmutableByteView.h
     include/MutableByteView.h
     include/NMEAParseStatus.h

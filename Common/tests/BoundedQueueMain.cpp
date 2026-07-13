@@ -11,7 +11,7 @@ using namespace std::chrono_literals;
 
 int main()
 {
-    BoundedQueue<int> queue(4);
+    BoundedQueue<int,4> queue;
 
     std::thread producer(
         [&queue]()
