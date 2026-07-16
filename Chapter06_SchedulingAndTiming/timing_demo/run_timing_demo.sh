@@ -69,6 +69,10 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+if [[ "$OUT_DIR" != /* ]]; then
+    OUT_DIR="$(pwd)/$OUT_DIR"
+fi
+
 mkdir -p "$OUT_DIR"
 
 RUNNER="$OUT_DIR/run_selected_scenarios.sh"
