@@ -1,7 +1,0 @@
-# ninja log v5
-1	294	1784475657345004341	MeasurementValidator/CMakeFiles/MeasurementValidator.dir/MeasurementValidator.cpp.o	e90eb501725b4beb
-294	299	1784475657350004302	MeasurementValidator/libMeasurementValidator.a	7eaf8389027f8588
-1	321	1784475743536326546	MeasurementValidator/CMakeFiles/MeasurementValidator.dir/MeasurementValidator.cpp.o	e90eb501725b4beb
-321	326	1784475743541326506	MeasurementValidator/libMeasurementValidator.a	7eaf8389027f8588
-1	380	1784475743595326080	tests/MeasurementValidator/CMakeFiles/MeasurementValidatorTests.dir/MeasurementValidatorTests.cpp.o	1520941b46fa487f
-380	419	1784475743634325772	tests/MeasurementValidator/MeasurementValidatorTests	6b359569c49e615d

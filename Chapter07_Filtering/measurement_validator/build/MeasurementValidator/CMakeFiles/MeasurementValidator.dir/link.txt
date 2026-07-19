@@ -1,2 +1,0 @@
-/usr/bin/ar qc libMeasurementValidator.a CMakeFiles/MeasurementValidator.dir/MeasurementValidator.cpp.o
-/usr/bin/ranlib libMeasurementValidator.a
