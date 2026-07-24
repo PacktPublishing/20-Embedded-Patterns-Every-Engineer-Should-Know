@@ -11,6 +11,29 @@ The monitor records:
 - current and peak live requested bytes
 - allocation count and requested bytes after initialization
 
+## Building and installing
+
+Configure and build the library and its tests from the `heap_monitor`
+directory:
+
+```bash
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build
+```
+
+Install the library and public header:
+
+```bash
+sudo cmake --install build
+```
+
+The default CMake installation prefix places the library in `/usr/local/lib`
+and the header in `/usr/local/include/heap_monitor`, so installation normally
+requires `sudo`. Building and testing do not require elevated privileges.
+
+## Using the monitor
+
 Mark the beginning of steady-state operation after the system has initialized:
 
 ```cpp

@@ -8,6 +8,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     include(CTest)
 endif()
 
+include(GNUInstallDirs)
+
 add_library(
     heap_monitor
     STATIC
@@ -17,7 +19,8 @@ add_library(
 target_include_directories(
     heap_monitor
     PUBLIC
-        "${CMAKE_CURRENT_LIST_DIR}/include"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 
 target_compile_features(heap_monitor PUBLIC cxx_std_20)
@@ -35,6 +38,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 elseif(MSVC)
     target_compile_options(heap_monitor PRIVATE /W4 /permissive-)
 endif()
+
+install(
+    TARGETS heap_monitor
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
+
+install(
+    DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/include/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
 
 if(BUILD_TESTING)
     add_executable(
