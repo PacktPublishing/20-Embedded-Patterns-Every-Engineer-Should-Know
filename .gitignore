@@ -1,0 +1,12 @@
+.gitkeep
+build
+.qtcreator
+*.zip
+
+.vagrant
+
+*/results
+
+filtering_demo_output
+
+*/timing_demo/*
