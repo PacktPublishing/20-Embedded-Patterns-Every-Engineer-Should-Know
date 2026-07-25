@@ -10,3 +10,7 @@ build
 filtering_demo_output
 
 */timing_demo/*
+
+Tools/measurement_generator/measurements.csv
+Tools/measurement_generator/noisy_measurements.png
+
