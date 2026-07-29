@@ -35,3 +35,24 @@ if(BUILD_TESTING)
     target_compile_options(test_smoker_plant PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME smoker_plant COMMAND test_smoker_plant)
 endif()
+
+set(CH09_INSTALL_BINDIR "$ENV{HOME}/bin"
+    CACHE PATH "Install directory for Chapter 9 demo executables and scripts"
+)
+
+set(CH09_RUN_DEMO_SCRIPT
+    "${CMAKE_CURRENT_LIST_DIR}/scripts/run_pid_demo.sh"
+)
+
+if(NOT EXISTS "${CH09_RUN_DEMO_SCRIPT}")
+    message(FATAL_ERROR "Missing script: ${CH09_RUN_DEMO_SCRIPT}")
+endif()
+
+install(TARGETS smoker_sim
+    RUNTIME DESTINATION "${CH09_INSTALL_BINDIR}"
+)
+
+install(PROGRAMS
+    "${CH09_RUN_DEMO_SCRIPT}"
+    DESTINATION "${CH09_INSTALL_BINDIR}"
+)
