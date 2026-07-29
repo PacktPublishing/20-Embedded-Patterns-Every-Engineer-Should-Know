@@ -44,8 +44,16 @@ set(CH09_RUN_DEMO_SCRIPT
     "${CMAKE_CURRENT_LIST_DIR}/scripts/run_pid_demo.sh"
 )
 
+set(CH09_PLOT_SCRIPT
+    "${CMAKE_CURRENT_LIST_DIR}/scripts/plot_pid_response.py"
+)
+
 if(NOT EXISTS "${CH09_RUN_DEMO_SCRIPT}")
     message(FATAL_ERROR "Missing script: ${CH09_RUN_DEMO_SCRIPT}")
+endif()
+
+if(NOT EXISTS "${CH09_PLOT_SCRIPT}")
+    message(FATAL_ERROR "Missing script: ${CH09_PLOT_SCRIPT}")
 endif()
 
 install(TARGETS smoker_sim
@@ -54,5 +62,6 @@ install(TARGETS smoker_sim
 
 install(PROGRAMS
     "${CH09_RUN_DEMO_SCRIPT}"
+    "${CH09_PLOT_SCRIPT}"
     DESTINATION "${CH09_INSTALL_BINDIR}"
 )
