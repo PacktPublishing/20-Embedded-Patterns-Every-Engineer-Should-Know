@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(smoker_control
+    include/PidController.h
+    include/SmokerPlant.h
+    include/Simulation.h
     src/PidController.cpp
     src/SmokerPlant.cpp
     src/Simulation.cpp
