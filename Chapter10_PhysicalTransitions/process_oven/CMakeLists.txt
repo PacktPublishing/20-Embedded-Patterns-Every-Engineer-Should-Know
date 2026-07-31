@@ -52,3 +52,8 @@ install(
     TARGETS process_oven
     RUNTIME DESTINATION "${CH10_INSTALL_DIR}"
 )
+
+install(
+    PROGRAMS plot_process_oven.py
+    DESTINATION "${CH10_INSTALL_DIR}"
+)
