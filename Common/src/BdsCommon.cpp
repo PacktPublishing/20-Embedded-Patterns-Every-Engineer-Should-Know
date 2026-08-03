@@ -1,73 +1,135 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2025 Mark Wilson
+// Copyright (c) 2026 Mark Wilson
 
 #include "BdsCommon.h"
 
 #include <cstring>
 
-uint8_t* u8(pbook::MutableByteView b) noexcept
+//------------------------------------------------------------------------------
+// Helpers for working with byte-view buffers
+//------------------------------------------------------------------------------
+
+std::uint8_t* u8(pbook::MutableByteView bytes) noexcept
 {
-    return reinterpret_cast<uint8_t*>(b.data());
+    return reinterpret_cast<std::uint8_t*>(bytes.data());
 }
 
-const uint8_t* u8(pbook::ImmutableByteView b) noexcept
+const std::uint8_t* u8(pbook::ImmutableByteView bytes) noexcept
 {
-    return reinterpret_cast<const uint8_t*>(b.data());
+    return reinterpret_cast<const std::uint8_t*>(bytes.data());
 }
 
-pbook::MutableByteView subview(pbook::MutableByteView b, std::size_t offset, std::size_t len) noexcept
+pbook::MutableByteView subview(
+    pbook::MutableByteView bytes,
+    std::size_t offset,
+    std::size_t length) noexcept
 {
-    if (offset > b.size())
+    if (offset > bytes.size())
     {
-        return pbook::MutableByteView();
+        return {};
     }
-    const std::size_t avail = b.size() - offset;
-    const std::size_t n = (len <= avail) ? len : avail;
-    return pbook::MutableByteView(b.data() + offset, n);
+
+    const std::size_t available = bytes.size() - offset;
+    const std::size_t viewSize =
+        (length <= available) ? length : available;
+
+    return pbook::MutableByteView(
+        bytes.data() + offset,
+        viewSize);
 }
 
-pbook::ImmutableByteView subview(pbook::ImmutableByteView b, std::size_t offset, std::size_t len) noexcept
+pbook::ImmutableByteView subview(
+    pbook::ImmutableByteView bytes,
+    std::size_t offset,
+    std::size_t length) noexcept
 {
-    if (offset > b.size())
+    if (offset > bytes.size())
     {
-        return pbook::ImmutableByteView();
+        return {};
     }
-    const std::size_t avail = b.size() - offset;
-    const std::size_t n = (len <= avail) ? len : avail;
-    return pbook::ImmutableByteView(b.data() + offset, n);
+
+    const std::size_t available = bytes.size() - offset;
+    const std::size_t viewSize =
+        (length <= available) ? length : available;
+
+    return pbook::ImmutableByteView(
+        bytes.data() + offset,
+        viewSize);
 }
+
+//------------------------------------------------------------------------------
+// Endianness
+//------------------------------------------------------------------------------
 
 Endianness detectHostEndianness() noexcept
 {
-    const uint32_t x = 0x01020304u;
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(&x);
-    return (p[0] == 0x04) ? Endianness::Little : Endianness::Big;
+    const std::uint32_t value = 0x01020304u;
+    const auto* firstByte =
+        reinterpret_cast<const std::uint8_t*>(&value);
+
+    return (firstByte[0] == 0x04u)
+               ? Endianness::Little
+               : Endianness::Big;
 }
 
-void copyForward(uint8_t* dst, const uint8_t* src, std::size_t n) noexcept
+//------------------------------------------------------------------------------
+// Safe copying with optional byte reversal
+//------------------------------------------------------------------------------
+
+void copyForward(
+    std::uint8_t* destination,
+    const std::uint8_t* source,
+    std::size_t size) noexcept
 {
-    std::memcpy(dst, src, n);
+    std::memcpy(destination, source, size);
 }
 
-void copyReversed(uint8_t* dst, const uint8_t* src, std::size_t n) noexcept
+void copyReversed(
+    std::uint8_t* destination,
+    const std::uint8_t* source,
+    std::size_t size) noexcept
 {
-    for (std::size_t i = 0; i < n; ++i)
+    for (std::size_t index = 0; index < size; ++index)
     {
-        dst[i] = src[n - 1 - i];
+        destination[index] = source[size - 1u - index];
     }
 }
 
-uint8_t xorChecksum(const uint8_t* data, std::size_t n) noexcept
+//------------------------------------------------------------------------------
+// CRC-16/CCITT-FALSE
+//------------------------------------------------------------------------------
+
+std::uint16_t crc16CcittFalse(
+    const std::uint8_t* data,
+    std::size_t size) noexcept
 {
-    uint8_t c = 0;
-    for (std::size_t i = 0; i < n; ++i)
+    std::uint16_t crc = Crc16CcittInitialValue;
+
+    for (std::size_t index = 0; index < size; ++index)
     {
-        c ^= data[i];
+        crc ^= static_cast<std::uint16_t>(data[index]) << 8u;
+
+        for (unsigned bit = 0; bit < 8u; ++bit)
+        {
+            if ((crc & 0x8000u) != 0u)
+            {
+                crc = static_cast<std::uint16_t>(
+                    (crc << 1u) ^ Crc16CcittPolynomial);
+            }
+            else
+            {
+                crc = static_cast<std::uint16_t>(crc << 1u);
+            }
+        }
     }
-    return c;
+
+    return crc;
 }
 
-uint8_t xorChecksum(pbook::ImmutableByteView b) noexcept
+std::uint16_t crc16CcittFalse(
+    pbook::ImmutableByteView bytes) noexcept
 {
-    return xorChecksum(u8(b), b.size());
+    return crc16CcittFalse(
+        u8(bytes),
+        bytes.size());
 }

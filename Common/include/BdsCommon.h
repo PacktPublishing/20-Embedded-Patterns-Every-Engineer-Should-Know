@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2025 Mark Wilson
+// Copyright (c) 2026 Mark Wilson
 
 #pragma once
 
@@ -13,17 +13,24 @@
 // Helpers for working with byte-view buffers
 //------------------------------------------------------------------------------
 
-uint8_t* u8(pbook::MutableByteView b) noexcept;
-const uint8_t* u8(pbook::ImmutableByteView b) noexcept;
+std::uint8_t* u8(pbook::MutableByteView bytes) noexcept;
+const std::uint8_t* u8(pbook::ImmutableByteView bytes) noexcept;
 
-pbook::MutableByteView subview(pbook::MutableByteView b, std::size_t offset, std::size_t len) noexcept;
-pbook::ImmutableByteView subview(pbook::ImmutableByteView b, std::size_t offset, std::size_t len) noexcept;
+pbook::MutableByteView subview(
+    pbook::MutableByteView bytes,
+    std::size_t offset,
+    std::size_t length) noexcept;
+
+pbook::ImmutableByteView subview(
+    pbook::ImmutableByteView bytes,
+    std::size_t offset,
+    std::size_t length) noexcept;
 
 //------------------------------------------------------------------------------
 // Endianness
 //------------------------------------------------------------------------------
 
-enum class Endianness : uint8_t
+enum class Endianness : std::uint8_t
 {
     Little = 0,
     Big = 1
@@ -35,7 +42,7 @@ Endianness detectHostEndianness() noexcept;
 // Stream error (embedded-friendly, latched)
 //------------------------------------------------------------------------------
 
-enum class StreamError : uint8_t
+enum class StreamError : std::uint8_t
 {
     None = 0,
     BufferOverflow,
@@ -45,16 +52,43 @@ enum class StreamError : uint8_t
 };
 
 //------------------------------------------------------------------------------
-// Utility: safe copy with optional byte reversal
+// Safe copying with optional byte reversal
 //------------------------------------------------------------------------------
 
-void copyForward(uint8_t* dst, const uint8_t* src, std::size_t n) noexcept;
-void copyReversed(uint8_t* dst, const uint8_t* src, std::size_t n) noexcept;
+void copyForward(
+    std::uint8_t* destination,
+    const std::uint8_t* source,
+    std::size_t size) noexcept;
+
+void copyReversed(
+    std::uint8_t* destination,
+    const std::uint8_t* source,
+    std::size_t size) noexcept;
 
 //------------------------------------------------------------------------------
-// Rolling XOR checksum (corruption detection, not security)
+// CRC-16/CCITT-FALSE
+//------------------------------------------------------------------------------
+//
+// Parameters:
+//
+//   Polynomial:   0x1021
+//   Initial value: 0xFFFF
+//   Reflect input: false
+//   Reflect output: false
+//   Final XOR:     0x0000
+//
+// The standard check value for the ASCII bytes "123456789" is 0x29B1.
+//
+// CRC detects accidental corruption. It does not provide security,
+// authenticity, or protection against deliberate modification.
 //------------------------------------------------------------------------------
 
-uint8_t xorChecksum(const uint8_t* data, std::size_t n) noexcept;
-uint8_t xorChecksum(pbook::ImmutableByteView b) noexcept;
+inline constexpr std::uint16_t Crc16CcittPolynomial = 0x1021u;
+inline constexpr std::uint16_t Crc16CcittInitialValue = 0xFFFFu;
 
+std::uint16_t crc16CcittFalse(
+    const std::uint8_t* data,
+    std::size_t size) noexcept;
+
+std::uint16_t crc16CcittFalse(
+    pbook::ImmutableByteView bytes) noexcept;

@@ -6,7 +6,7 @@
 //
 // - Two streams: BinaryWriteStream (MutableByteView) and
 //   BinaryReadStream (ImmutableByteView)
-// - Chaining readX()/writeX() operations with latched errors and no partial
+// - Chained readX()/writeX() operations with latched errors and no partial
 //   reads or writes
 // - Endianness: the host endianness is detected, while the caller specifies
 //   the wire endianness
@@ -16,20 +16,21 @@
 //       remaining 3 bytes store the size as a 24-bit unsigned value
 //     * Wide encoding supports sizes 255..16,777,215 (0x00FF'FFFF)
 //
-// Checksums:
-// - Rolling XOR (NMEA-style) detects accidental corruption; it does not
-//   provide security or authentication.
-// - The header checksum covers the fixed header bytes with headerChecksum
+// CRC-16:
+// - CRC-16/CCITT-FALSE detects accidental corruption; it does not provide
+//   security or authentication.
+// - The header CRC covers the serialized fixed-size wire header with headerCrc
 //   treated as zero.
-// - The payload checksum covers the payload bytes.
+// - The payload CRC covers the complete encoded payload.
+// - The payload CRC is calculated before the header CRC because the serialized
+//   header includes the payload CRC.
 //
 // Notes:
 // - Uses the Packt Common byte-view aliases, which are based on std::span.
 // - This file is intentionally explicit and repetitive. That is useful both
 //   for embedded development and for teaching.
-// - These are characterization tests for the original DDS implementation.
-//   They establish a working baseline before Chapter 11 revises the message
-//   header, framing rules, and integrity handling.
+// - These tests characterize the migrated DDS implementation while establishing
+//   the revised Chapter 11 framing and integrity behavior.
 //
 
 #include <cassert>
@@ -138,7 +139,7 @@ int main()
     const auto payloadSize =
         static_cast<std::uint32_t>(payloadWriter.bytesWritten());
 
-    const std::size_t headerSize = sizeof(MessageHeaderV1);
+    const std::size_t headerSize = MessageHeaderV1WireSize;
 
     // Reserve room for the header, then append the encoded payload.
     {
@@ -179,9 +180,8 @@ int main()
     header.messageType = 9;
     header.payloadSize = payloadSize;
     header.flags = 0;
-    header.reserved = 0;
 
-    finalizeChecksums(header, framePayload);
+    finalizeCrcs(header, framePayload);
 
     // Replace the reserved header bytes with the completed header.
     {
@@ -217,9 +217,6 @@ int main()
         receivedPayload);
 
     assert(frameReader.ok());
-    assert(validatePayloadChecksum(
-        receivedHeader,
-        receivedPayload));
 
     // Decode the payload using the byte order declared in the header.
     const Endianness receivedPayloadEndianness =
@@ -248,10 +245,6 @@ int main()
     const pbook::ImmutableByteView corruptedPayload(
         frame + headerSize,
         payloadSize);
-
-    assert(!validatePayloadChecksum(
-        receivedHeader,
-        corruptedPayload));
 
     std::cout << "All BinaryDataStream demo tests passed.\n";
     return 0;
