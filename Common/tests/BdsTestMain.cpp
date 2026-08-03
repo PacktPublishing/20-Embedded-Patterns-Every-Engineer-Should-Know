@@ -63,6 +63,19 @@ static bool nearlyEqual(double lhs, double rhs, double epsilon = 1e-9)
 int main()
 {
     // -------------------------------------------------------------------------
+    // CRC-16/CCITT-FALSE standard check value
+    // -------------------------------------------------------------------------
+
+    constexpr std::uint8_t crcTestData[]{
+        '1', '2', '3', '4', '5', '6', '7', '8', '9'
+    };
+
+    assert(
+        crc16CcittFalse(
+            crcTestData,
+            sizeof(crcTestData)) == 0x29B1u);
+
+    // -------------------------------------------------------------------------
     // Primitive payload round trip
     // -------------------------------------------------------------------------
 
