@@ -1,11 +1,35 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2025 Mark Wilson
+// Copyright (c) 2026 Mark Wilson
 
 //
-// BinaryDataStream characterization tests
+// BinaryDataStream test/demo (C++20, embedded-friendly, no exceptions)
 //
-// These tests preserve the behavior of the original DDS implementation before
-// the message header and checksum handling are revised for Chapter 11.
+// - Two streams: BinaryWriteStream (MutableByteView) and
+//   BinaryReadStream (ImmutableByteView)
+// - Chaining readX()/writeX() operations with latched errors and no partial
+//   reads or writes
+// - Endianness: the host endianness is detected, while the caller specifies
+//   the wire endianness
+// - Size optimization for sized fields (strings/blobs/vectors):
+//     * Narrow size: 1 byte for lengths 0..254
+//     * Wide size: 4 bytes total, where the first byte is 0xFF and the
+//       remaining 3 bytes store the size as a 24-bit unsigned value
+//     * Wide encoding supports sizes 255..16,777,215 (0x00FF'FFFF)
+//
+// Checksums:
+// - Rolling XOR (NMEA-style) detects accidental corruption; it does not
+//   provide security or authentication.
+// - The header checksum covers the fixed header bytes with headerChecksum
+//   treated as zero.
+// - The payload checksum covers the payload bytes.
+//
+// Notes:
+// - Uses the Packt Common byte-view aliases, which are based on std::span.
+// - This file is intentionally explicit and repetitive. That is useful both
+//   for embedded development and for teaching.
+// - These are characterization tests for the original DDS implementation.
+//   They establish a working baseline before Chapter 11 revises the message
+//   header, framing rules, and integrity handling.
 //
 
 #include <cassert>
