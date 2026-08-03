@@ -16,7 +16,7 @@ namespace weather
 class BinaryReadStream
 {
 public:
-    explicit BinaryReadStream(ImmutableByteView buffer,
+    explicit BinaryReadStream(pbook::ImmutableByteView buffer,
                               Endianness wireEndianness = Endianness::Little,
                               uint32_t maxSizedField = 0x00FFFFFFu) noexcept;
 
@@ -47,7 +47,7 @@ public:
     BinaryReadStream& readSize(uint32_t& out) noexcept;
 
     // Pass-through view (no decoding)
-    BinaryReadStream& readBytesView(uint32_t n, ImmutableByteView& outView) noexcept;
+    BinaryReadStream& readBytesView(uint32_t n, pbook::ImmutableByteView& outView) noexcept;
 
     BinaryReadStream& readStringView(std::string_view& out) noexcept;
 
@@ -58,7 +58,7 @@ private:
     bool ensureAvailable(std::size_t n) noexcept;
 
 private:
-    ImmutableByteView m_buf;
+    pbook::ImmutableByteView m_buf;
     std::size_t m_pos;
     StreamError m_err;
 

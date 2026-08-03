@@ -13,11 +13,11 @@
 // Helpers for working with byte-view buffers
 //------------------------------------------------------------------------------
 
-uint8_t* u8(MutableByteView b) noexcept;
-const uint8_t* u8(ImmutableByteView b) noexcept;
+uint8_t* u8(pbook::MutableByteView b) noexcept;
+const uint8_t* u8(pbook::ImmutableByteView b) noexcept;
 
-MutableByteView subview(MutableByteView b, std::size_t offset, std::size_t len) noexcept;
-ImmutableByteView subview(ImmutableByteView b, std::size_t offset, std::size_t len) noexcept;
+pbook::MutableByteView subview(pbook::MutableByteView b, std::size_t offset, std::size_t len) noexcept;
+pbook::ImmutableByteView subview(pbook::ImmutableByteView b, std::size_t offset, std::size_t len) noexcept;
 
 //------------------------------------------------------------------------------
 // Endianness
@@ -56,5 +56,5 @@ void copyReversed(uint8_t* dst, const uint8_t* src, std::size_t n) noexcept;
 //------------------------------------------------------------------------------
 
 uint8_t xorChecksum(const uint8_t* data, std::size_t n) noexcept;
-uint8_t xorChecksum(ImmutableByteView b) noexcept;
+uint8_t xorChecksum(pbook::ImmutableByteView b) noexcept;
 

@@ -5,36 +5,36 @@
 
 #include <cstring>
 
-uint8_t* u8(MutableByteView b) noexcept
+uint8_t* u8(pbook::MutableByteView b) noexcept
 {
     return reinterpret_cast<uint8_t*>(b.data());
 }
 
-const uint8_t* u8(ImmutableByteView b) noexcept
+const uint8_t* u8(pbook::ImmutableByteView b) noexcept
 {
     return reinterpret_cast<const uint8_t*>(b.data());
 }
 
-MutableByteView subview(MutableByteView b, std::size_t offset, std::size_t len) noexcept
+pbook::MutableByteView subview(pbook::MutableByteView b, std::size_t offset, std::size_t len) noexcept
 {
     if (offset > b.size())
     {
-        return MutableByteView();
+        return pbook::MutableByteView();
     }
     const std::size_t avail = b.size() - offset;
     const std::size_t n = (len <= avail) ? len : avail;
-    return MutableByteView(b.data() + offset, n);
+    return pbook::MutableByteView(b.data() + offset, n);
 }
 
-ImmutableByteView subview(ImmutableByteView b, std::size_t offset, std::size_t len) noexcept
+pbook::ImmutableByteView subview(pbook::ImmutableByteView b, std::size_t offset, std::size_t len) noexcept
 {
     if (offset > b.size())
     {
-        return ImmutableByteView();
+        return pbook::ImmutableByteView();
     }
     const std::size_t avail = b.size() - offset;
     const std::size_t n = (len <= avail) ? len : avail;
-    return ImmutableByteView(b.data() + offset, n);
+    return pbook::ImmutableByteView(b.data() + offset, n);
 }
 
 Endianness detectHostEndianness() noexcept
@@ -67,7 +67,7 @@ uint8_t xorChecksum(const uint8_t* data, std::size_t n) noexcept
     return c;
 }
 
-uint8_t xorChecksum(ImmutableByteView b) noexcept
+uint8_t xorChecksum(pbook::ImmutableByteView b) noexcept
 {
     return xorChecksum(u8(b), b.size());
 }

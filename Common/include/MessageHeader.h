@@ -61,7 +61,7 @@ inline uint8_t computeHeaderChecksum(const MessageHeaderV1& h) noexcept
     return xorChecksum(tmp, sizeof(tmp));
 }
 
-inline void finalizeChecksums(MessageHeaderV1& h, ImmutableByteView payload) noexcept
+inline void finalizeChecksums(MessageHeaderV1& h, pbook::ImmutableByteView payload) noexcept
 {
     h.headerSize = static_cast<uint8_t>(sizeof(MessageHeaderV1));
     h.payloadChecksum = xorChecksum(payload);
@@ -126,7 +126,7 @@ inline bool validateHeaderV1(const MessageHeaderV1& h) noexcept
     return computeHeaderChecksum(h) == h.headerChecksum;
 }
 
-inline bool validatePayloadChecksum(const MessageHeaderV1& h, ImmutableByteView payload) noexcept
+inline bool validatePayloadChecksum(const MessageHeaderV1& h, pbook::ImmutableByteView payload) noexcept
 {
     (void)h;
     return xorChecksum(payload) == h.payloadChecksum;

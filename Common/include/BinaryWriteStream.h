@@ -18,7 +18,7 @@ namespace weather
 class BinaryWriteStream
 {
 public:
-    explicit BinaryWriteStream(MutableByteView buffer,
+    explicit BinaryWriteStream(pbook::MutableByteView buffer,
                                Endianness wireEndianness = Endianness::Little,
                                uint32_t maxSizedField = 0x00FFFFFFu) noexcept;
 
@@ -49,7 +49,7 @@ public:
     // ---- Sized field encoding (size optimization) ----
     BinaryWriteStream& writeSize(uint32_t n) noexcept;
 
-    BinaryWriteStream& writeBytes(ImmutableByteView bytes) noexcept;
+    BinaryWriteStream& writeBytes(pbook::ImmutableByteView bytes) noexcept;
 
     BinaryWriteStream& writeString(std::string_view s) noexcept;
 
@@ -62,7 +62,7 @@ private:
     bool ensureCapacity(std::size_t n) noexcept;
 
 private:
-    MutableByteView m_buf;
+    pbook::MutableByteView m_buf;
     std::size_t m_pos;
     StreamError m_err;
 

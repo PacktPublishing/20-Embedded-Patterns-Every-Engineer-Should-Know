@@ -10,7 +10,7 @@
 namespace weather
 {
 
-BinaryReadStream::BinaryReadStream(ImmutableByteView buffer,
+BinaryReadStream::BinaryReadStream(pbook::ImmutableByteView buffer,
                                    Endianness wireEndianness,
                                    uint32_t maxSizedField) noexcept
     : m_buf(buffer)
@@ -203,7 +203,7 @@ BinaryReadStream& BinaryReadStream::readSize(uint32_t& out) noexcept
     return *this;
 }
 
-BinaryReadStream& BinaryReadStream::readBytesView(uint32_t n, ImmutableByteView& outView) noexcept
+BinaryReadStream& BinaryReadStream::readBytesView(uint32_t n, pbook::ImmutableByteView& outView) noexcept
 {
     if (!ok())
     {

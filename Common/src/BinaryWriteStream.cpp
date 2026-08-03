@@ -10,7 +10,7 @@
 namespace weather
 {
 
-BinaryWriteStream::BinaryWriteStream(MutableByteView buffer,
+BinaryWriteStream::BinaryWriteStream(pbook::MutableByteView buffer,
                                      Endianness wireEndianness,
                                      uint32_t maxSizedField) noexcept
     : m_buf(buffer)
@@ -138,7 +138,7 @@ BinaryWriteStream& BinaryWriteStream::writeSize(uint32_t n) noexcept
     return writeRawBytes(tmp, 4);
 }
 
-BinaryWriteStream& BinaryWriteStream::writeBytes(ImmutableByteView bytes) noexcept
+BinaryWriteStream& BinaryWriteStream::writeBytes(pbook::ImmutableByteView bytes) noexcept
 {
     if (!ok())
     {
