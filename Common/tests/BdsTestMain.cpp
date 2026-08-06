@@ -92,7 +92,7 @@ int main()
     constexpr Endianness payloadWireEndianness = Endianness::Little;
     constexpr std::string_view originalName{"TMPP"};
 
-    weather::BinaryWriteStream writer(
+    pbook::BinaryWriteStream writer(
         outputBuffer,
         payloadWireEndianness);
 
@@ -107,7 +107,7 @@ int main()
     const std::size_t bytesWritten = writer.bytesWritten();
 
     pbook::ImmutableByteView inputBuffer(storage, bytesWritten);
-    weather::BinaryReadStream reader(
+    pbook::BinaryReadStream reader(
         inputBuffer,
         payloadWireEndianness);
 
@@ -139,7 +139,7 @@ int main()
         payloadStorage,
         sizeof(payloadStorage));
 
-    weather::BinaryWriteStream payloadWriter(
+    pbook::BinaryWriteStream payloadWriter(
         payloadBuffer,
         payloadWireEndianness);
 
@@ -156,7 +156,7 @@ int main()
 
     // Reserve room for the header, then append the encoded payload.
     {
-        weather::BinaryWriteStream frameWriter(
+        pbook::BinaryWriteStream frameWriter(
             frameBuffer,
             HeaderWireEndianness);
 
@@ -201,7 +201,7 @@ int main()
         pbook::MutableByteView headerRegion =
             subview(frameBuffer, 0, headerSize);
 
-        weather::BinaryWriteStream headerWriter(
+        pbook::BinaryWriteStream headerWriter(
             headerRegion,
             HeaderWireEndianness);
 
@@ -214,7 +214,7 @@ int main()
         frame,
         headerSize + payloadSize);
 
-    weather::BinaryReadStream frameReader(
+    pbook::BinaryReadStream frameReader(
         frameView,
         HeaderWireEndianness);
 
@@ -235,7 +235,7 @@ int main()
     const Endianness receivedPayloadEndianness =
         payloadEndianFromHeader(receivedHeader.payloadEndian);
 
-    weather::BinaryReadStream payloadReader(
+    pbook::BinaryReadStream payloadReader(
         receivedPayload,
         receivedPayloadEndianness);
 

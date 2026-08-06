@@ -10,7 +10,7 @@
 #include "ImmutableByteView.h"
 #include "BdsCommon.h"
 
-namespace weather
+namespace pbook
 {
 
 class BinaryReadStream
@@ -69,4 +69,4 @@ private:
     uint32_t m_maxSizedField;
 };
 
-} // namespace weather
+} // namespace pbook

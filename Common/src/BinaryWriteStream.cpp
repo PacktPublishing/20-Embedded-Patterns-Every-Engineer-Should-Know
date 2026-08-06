@@ -5,9 +5,8 @@
 #include "BinaryWriteStream.h"
 
 #include <cstring>
-#include <type_traits>
 
-namespace weather
+namespace pbook
 {
 
 BinaryWriteStream::BinaryWriteStream(pbook::MutableByteView buffer,

@@ -7,7 +7,7 @@
 #include <cstring>
 #include <string_view>
 
-namespace weather
+namespace pbook
 {
 
 BinaryReadStream::BinaryReadStream(pbook::ImmutableByteView buffer,

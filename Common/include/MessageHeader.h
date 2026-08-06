@@ -74,8 +74,8 @@ inline Endianness payloadEndianFromHeader(
 // Header encoding and decoding
 //------------------------------------------------------------------------------
 
-inline weather::BinaryWriteStream& writeHeaderV1(
-    weather::BinaryWriteStream& writer,
+inline pbook::BinaryWriteStream& writeHeaderV1(
+    pbook::BinaryWriteStream& writer,
     const MessageHeaderV1& header) noexcept
 {
     writer.writeUInt32(header.magic)
@@ -93,8 +93,8 @@ inline weather::BinaryWriteStream& writeHeaderV1(
     return writer;
 }
 
-inline weather::BinaryReadStream& readHeaderV1(
-    weather::BinaryReadStream& reader,
+inline pbook::BinaryReadStream& readHeaderV1(
+    pbook::BinaryReadStream& reader,
     MessageHeaderV1& header) noexcept
 {
     reader.readUInt32(header.magic)
@@ -129,7 +129,7 @@ inline std::uint16_t computeHeaderCrc(
     MessageHeaderV1 headerForCrc = header;
     headerForCrc.headerCrc = 0u;
 
-    weather::BinaryWriteStream writer(
+    pbook::BinaryWriteStream writer(
         pbook::MutableByteView(
             wireBytes.data(),
             wireBytes.size()),
