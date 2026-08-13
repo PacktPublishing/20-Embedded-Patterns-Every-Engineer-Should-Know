@@ -31,7 +31,7 @@ inline constexpr std::uint32_t MessageMagicV1 =
     0x31534442u; // 'B''D''S''1' in little-endian wire order
 
 inline constexpr std::uint8_t MessageVersionV1 = 1u;
-inline constexpr std::size_t MessageHeaderV1WireSize = 24u;
+inline constexpr std::size_t MessageHeaderV1WireSize = 28u;
 
 // Message flags carried in MessageHeaderV1::flags.
 // Unassigned bits are reserved and must be zero in Version 1.
@@ -100,6 +100,7 @@ inline pbook::BinaryWriteStream& writeHeaderV1(
         .writeUInt8(header.headerFlags)
         .writeUInt16(header.serviceId)
         .writeUInt16(header.messageType)
+        .writeUInt16(header.transactionId)
         .writeUInt32(header.payloadSize)
         .writeUInt32(header.flags)
         .writeUInt16(header.headerCrc)
@@ -119,6 +120,7 @@ inline pbook::BinaryReadStream& readHeaderV1(
         .readUInt8(header.headerFlags)
         .readUInt16(header.serviceId)
         .readUInt16(header.messageType)
+        .readUInt32(header.transactionId)
         .readUInt32(header.payloadSize)
         .readUInt32(header.flags)
         .readUInt16(header.headerCrc)
@@ -131,7 +133,7 @@ inline pbook::BinaryReadStream& readHeaderV1(
 // Header CRC
 //------------------------------------------------------------------------------
 //
-// The header CRC is calculated over the serialized 24-byte wire header with
+// The header CRC is calculated over the serialized 28-byte wire header with
 // headerCrc set to zero. The payload CRC remains present in those bytes, so the
 // payload CRC must be calculated before the header CRC.
 //------------------------------------------------------------------------------
