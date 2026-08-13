@@ -33,6 +33,11 @@ inline constexpr std::uint32_t MessageMagicV1 =
 inline constexpr std::uint8_t MessageVersionV1 = 1u;
 inline constexpr std::size_t MessageHeaderV1WireSize = 24u;
 
+// Message flags carried in MessageHeaderV1::flags.
+// Unassigned bits are reserved and must be zero in Version 1.
+inline constexpr std::uint32_t MessageFlagIdempotent = 1u << 0;
+inline constexpr std::uint32_t MessageFlagsV1Mask = MessageFlagIdempotent;
+
 struct MessageHeaderV1
 {
     std::uint32_t magic{MessageMagicV1};
@@ -44,14 +49,24 @@ struct MessageHeaderV1
 
     std::uint16_t serviceId{0};
     std::uint16_t messageType{0};
+    std::uint32_t transactionId{0};
 
     std::uint32_t payloadSize{0};
 
-    std::uint32_t flags{0}; // Reserved; must be zero in v1
+    std::uint32_t flags{0}; // Message flags; unknown bits must be zero in v1
 
     std::uint16_t headerCrc{0};
     std::uint16_t payloadCrc{0};
 };
+
+//------------------------------------------------------------------------------
+// Message flags
+//------------------------------------------------------------------------------
+
+inline bool isIdempotent(const MessageHeaderV1& header) noexcept
+{
+    return (header.flags & MessageFlagIdempotent) != 0u;
+}
 
 //------------------------------------------------------------------------------
 // Payload endianness
@@ -197,7 +212,12 @@ inline bool validateHeaderV1(
         return false;
     }
 
-    if (header.headerFlags != 0u || header.flags != 0u)
+    if (header.headerFlags != 0u)
+    {
+        return false;
+    }
+
+    if ((header.flags & ~MessageFlagsV1Mask) != 0u)
     {
         return false;
     }
