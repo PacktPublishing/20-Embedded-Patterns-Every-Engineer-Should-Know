@@ -62,6 +62,7 @@ add_library(CommonBds STATIC
     include/BinaryReadStream.h
     include/BinaryWriteStream.h
     include/MessageHeader.h
+    include/MessageFrame.h
 
     src/BdsCommon.cpp
     src/BinaryReadStream.cpp
@@ -85,6 +86,33 @@ target_compile_features(CommonBds
 
 set_target_properties(CommonBds PROPERTIES
     FOLDER "Common"
+)
+
+
+# ------------------------------------------------------------
+# Weather Device shared protocol
+# ------------------------------------------------------------
+
+add_library(CommonWeatherDevice INTERFACE)
+
+target_sources(CommonWeatherDevice
+    INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/WeatherDevice/WeatherControlProtocol.h
+)
+
+target_include_directories(CommonWeatherDevice
+    INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/WeatherDevice
+)
+
+target_link_libraries(CommonWeatherDevice
+    INTERFACE
+        CommonBds
+)
+
+target_compile_features(CommonWeatherDevice
+    INTERFACE
+        cxx_std_20
 )
 
 # ------------------------------------------------------------
@@ -147,4 +175,22 @@ if (BUILD_TESTING)
             COMMAND CommonBds_Tests
         )
     endif()
+
+    add_executable(CommonWeatherDevice_Tests
+        tests/WeatherControlProtocolTest.cpp
+    )
+
+    target_link_libraries(CommonWeatherDevice_Tests
+        PRIVATE
+            CommonWeatherDevice
+    )
+
+    set_target_properties(CommonWeatherDevice_Tests PROPERTIES
+        FOLDER "CommonTests"
+    )
+
+    add_test(
+        NAME CommonWeatherDevice_Tests
+        COMMAND CommonWeatherDevice_Tests
+    )
 endif()
