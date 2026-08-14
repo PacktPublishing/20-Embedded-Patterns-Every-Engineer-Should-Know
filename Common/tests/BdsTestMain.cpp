@@ -45,6 +45,7 @@
 #include "BinaryWriteStream.h"
 #include "ImmutableByteView.h"
 #include "MessageHeader.h"
+#include "MessageFrame.h"
 #include "MutableByteView.h"
 
 struct Sample
@@ -128,7 +129,7 @@ int main()
     assert(decodedName == originalName);
 
     // -------------------------------------------------------------------------
-    // Framed message with header and payload checksums
+    // Complete framed message with header and payload checksums
     // -------------------------------------------------------------------------
 
     std::byte frame[256]{};
@@ -149,87 +150,52 @@ int main()
 
     assert(payloadWriter.ok());
 
-    const auto payloadSize =
-        static_cast<std::uint32_t>(payloadWriter.bytesWritten());
-
-    const std::size_t headerSize = MessageHeaderV1WireSize;
-
-    // Reserve room for the header, then append the encoded payload.
-    {
-        pbook::BinaryWriteStream frameWriter(
-            frameBuffer,
-            HeaderWireEndianness);
-
-        const MessageHeaderV1 zeroHeader{};
-        const auto* zeroHeaderBytes =
-            reinterpret_cast<const std::byte*>(&zeroHeader);
-
-        frameWriter.writeBytes(
-            pbook::ImmutableByteView(
-                zeroHeaderBytes,
-                sizeof(zeroHeader)));
-
-        frameWriter.writeBytes(
-            pbook::ImmutableByteView(
-                payloadStorage,
-                payloadSize));
-
-        assert(frameWriter.ok());
-    }
-
-    const pbook::ImmutableByteView framePayload(
-        frame + headerSize,
+    const std::size_t payloadSize = payloadWriter.bytesWritten();
+    const pbook::ImmutableByteView payloadView(
+        payloadStorage,
         payloadSize);
 
     MessageHeaderV1 header{};
-    header.version = 1;
-    header.headerSize =
-        static_cast<std::uint8_t>(sizeof(MessageHeaderV1));
     header.payloadEndian =
         static_cast<std::uint8_t>(
             payloadWireEndianness == Endianness::Little ? 0 : 1);
-    header.headerFlags = 0;
     header.serviceId = 1;
     header.messageType = 9;
-    header.payloadSize = payloadSize;
-    header.flags = 0;
+    header.transactionId = 42;
+    header.flags = MessageFlagIdempotent;
 
-    finalizeCrcs(header, framePayload);
+    std::size_t frameSize{};
+    assert(
+        writeFrameV1(
+            frameBuffer,
+            header,
+            payloadView,
+            frameSize) == MessageFrameStatus::Ok);
 
-    // Replace the reserved header bytes with the completed header.
-    {
-        pbook::MutableByteView headerRegion =
-            subview(frameBuffer, 0, headerSize);
+    assert(frameSize == MessageHeaderV1WireSize + payloadSize);
 
-        pbook::BinaryWriteStream headerWriter(
-            headerRegion,
-            HeaderWireEndianness);
-
-        writeHeaderV1(headerWriter, header);
-        assert(headerWriter.ok());
-    }
-
-    // Read and validate the complete frame.
-    const pbook::ImmutableByteView frameView(
-        frame,
-        headerSize + payloadSize);
-
-    pbook::BinaryReadStream frameReader(
-        frameView,
-        HeaderWireEndianness);
+    const pbook::ImmutableByteView frameView(frame, frameSize);
 
     MessageHeaderV1 receivedHeader{};
-    readHeaderV1(frameReader, receivedHeader);
-
-    assert(frameReader.ok());
-    assert(validateHeaderV1(receivedHeader));
-
     pbook::ImmutableByteView receivedPayload;
-    frameReader.readBytesView(
-        receivedHeader.payloadSize,
-        receivedPayload);
 
-    assert(frameReader.ok());
+    assert(
+        readFrameV1(
+            frameView,
+            receivedHeader,
+            receivedPayload) == MessageFrameStatus::Ok);
+
+    assert(receivedHeader.serviceId == 1);
+    assert(receivedHeader.messageType == 9);
+    assert(receivedHeader.transactionId == 42);
+    assert(receivedHeader.payloadSize == payloadSize);
+    assert(isIdempotent(receivedHeader));
+
+    // Version 1 accepts assigned message flags and rejects unknown bits.
+    MessageHeaderV1 unsupportedFlags = receivedHeader;
+    unsupportedFlags.flags |= (1u << 1);
+    unsupportedFlags.headerCrc = computeHeaderCrc(unsupportedFlags);
+    assert(!validateHeaderV1(unsupportedFlags));
 
     // Decode the payload using the byte order declared in the header.
     const Endianness receivedPayloadEndianness =
@@ -252,12 +218,28 @@ int main()
     assert(secondValue == 777);
     assert(text == "opaque");
 
-    // Corrupt one payload byte and verify that validation fails.
-    frame[headerSize + 1] ^= std::byte{0x01};
+    // A complete frame helper must fail cleanly when output is too small.
+    std::byte smallFrame[MessageHeaderV1WireSize]{};
+    std::size_t smallFrameBytes{};
+    assert(
+        writeFrameV1(
+            pbook::MutableByteView(smallFrame, sizeof(smallFrame)),
+            header,
+            payloadView,
+            smallFrameBytes) == MessageFrameStatus::OutputTooSmall);
+    assert(smallFrameBytes == 0u);
 
-    const pbook::ImmutableByteView corruptedPayload(
-        frame + headerSize,
-        payloadSize);
+    // Corrupt one payload byte and verify that complete-frame validation fails.
+    frame[MessageHeaderV1WireSize + 1] ^= std::byte{0x01};
+
+    MessageHeaderV1 corruptedHeader{};
+    pbook::ImmutableByteView corruptedPayload;
+    assert(
+        readFrameV1(
+            frameView,
+            corruptedHeader,
+            corruptedPayload) == MessageFrameStatus::InvalidPayloadCrc);
+    assert(corruptedPayload.empty());
 
     std::cout << "All BinaryDataStream demo tests passed.\n";
     return 0;

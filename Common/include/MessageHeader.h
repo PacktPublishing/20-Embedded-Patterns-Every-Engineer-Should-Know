@@ -100,7 +100,7 @@ inline pbook::BinaryWriteStream& writeHeaderV1(
         .writeUInt8(header.headerFlags)
         .writeUInt16(header.serviceId)
         .writeUInt16(header.messageType)
-        .writeUInt16(header.transactionId)
+        .writeUInt32(header.transactionId)
         .writeUInt32(header.payloadSize)
         .writeUInt32(header.flags)
         .writeUInt16(header.headerCrc)
