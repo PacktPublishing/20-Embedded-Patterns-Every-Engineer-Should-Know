@@ -7,6 +7,7 @@
 #include "MessageFrame.h"
 #include "MessageHeader.h"
 #include "SignalFdSource.h"
+#include "TimerFdSource.h"
 #include "UdpDatagramReceiver.h"
 #include "WeatherControlProtocol.h"
 
@@ -17,6 +18,7 @@
 
 #include <array>
 #include <cerrno>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -33,13 +35,47 @@ struct Options
     std::uint16_t serverPort{9100};
     std::uint32_t intervalMilliseconds{5000};
     std::uint32_t transactionId{42};
+    std::uint32_t responseTimeoutMilliseconds{500};
+    std::uint32_t retryDelayMilliseconds{250};
+    std::uint32_t maxAttempts{3};
+};
+
+struct RetryPolicy
+{
+    std::chrono::milliseconds responseTimeout{500};
+    std::chrono::milliseconds retryDelay{250};
+    std::uint32_t maxAttempts{3};
+};
+
+enum class TransactionState
+{
+    Idle,
+    WaitingForResponse,
+    WaitingToRetry,
+    Succeeded,
+    Failed
+};
+
+struct Transaction
+{
+    std::uint32_t id{};
+    std::uint32_t attempts{};
+    TransactionState state{TransactionState::Idle};
 };
 
 struct AppContext
 {
     bool stopRequested{false};
     bool succeeded{false};
-    std::uint32_t transactionId{};
+    bool serviceAvailable{true};
+
+    Options options{};
+    RetryPolicy policy{};
+    Transaction transaction{};
+    sockaddr_in destination{};
+
+    pbook::UdpDatagramReceiver* udp{nullptr};
+    pbook::TimerFdSource* timer{nullptr};
 };
 
 bool parse_u16(std::string_view text, std::uint16_t& out)
@@ -78,11 +114,14 @@ void print_usage(const char* argv0)
     std::cout
         << "Usage: " << argv0 << " [options]\n\n"
         << "Options:\n"
-        << "  --server <IPv4>       Server address. Default: 127.0.0.1\n"
-        << "  --port <port>         Server UDP port. Default: 9100\n"
-        << "  --interval-ms <ms>    Reporting interval to request. Default: 5000\n"
-        << "  --transaction <id>    Nonzero transaction ID. Default: 42\n"
-        << "  --help                Print this help\n";
+        << "  --server <IPv4>          Server address. Default: 127.0.0.1\n"
+        << "  --port <port>            Server UDP port. Default: 9100\n"
+        << "  --interval-ms <ms>       Reporting interval to request. Default: 5000\n"
+        << "  --transaction <id>       Nonzero transaction ID. Default: 42\n"
+        << "  --timeout-ms <ms>        Response timeout. Default: 500\n"
+        << "  --retry-delay-ms <ms>    Delay before a retry. Default: 250\n"
+        << "  --max-attempts <count>   Total attempts including the first. Default: 3\n"
+        << "  --help                   Print this help\n";
 }
 
 bool parse_options(int argc, char** argv, Options& options)
@@ -142,6 +181,33 @@ bool parse_options(int argc, char** argv, Options& options)
                 return false;
             }
         }
+        else if (arg == "--timeout-ms")
+        {
+            const char* value = require_value("--timeout-ms");
+            if (value == nullptr || !parse_u32(value, options.responseTimeoutMilliseconds))
+            {
+                std::cerr << "Invalid --timeout-ms value\n";
+                return false;
+            }
+        }
+        else if (arg == "--retry-delay-ms")
+        {
+            const char* value = require_value("--retry-delay-ms");
+            if (value == nullptr || !parse_u32(value, options.retryDelayMilliseconds))
+            {
+                std::cerr << "Invalid --retry-delay-ms value\n";
+                return false;
+            }
+        }
+        else if (arg == "--max-attempts")
+        {
+            const char* value = require_value("--max-attempts");
+            if (value == nullptr || !parse_u32(value, options.maxAttempts))
+            {
+                std::cerr << "Invalid --max-attempts value\n";
+                return false;
+            }
+        }
         else
         {
             std::cerr << "Unknown option: " << arg << "\n";
@@ -179,6 +245,164 @@ bool send_datagram(int fd,
     return sent == static_cast<ssize_t>(bytes.size());
 }
 
+const char* nack_reason_name(weather::NackReason reason) noexcept
+{
+    switch (reason)
+    {
+        case weather::NackReason::Busy:
+            return "busy";
+        case weather::NackReason::InvalidValue:
+            return "invalid value";
+        case weather::NackReason::UnsupportedOperation:
+            return "unsupported operation";
+    }
+
+    return "unknown";
+}
+
+bool send_request_frame(AppContext& context) noexcept
+{
+    if (context.udp == nullptr)
+    {
+        return false;
+    }
+
+    std::array<std::byte, 32> payloadStorage{};
+    pbook::BinaryWriteStream payloadWriter(
+        pbook::MutableByteView{
+            payloadStorage.data(),
+            payloadStorage.size()},
+        Endianness::Little);
+
+    const weather::SetReportingIntervalRequest request{
+        .intervalMilliseconds = context.options.intervalMilliseconds};
+
+    weather::writeSetReportingIntervalRequest(payloadWriter, request);
+    if (!payloadWriter.ok())
+    {
+        return false;
+    }
+
+    const pbook::ImmutableByteView payload{
+        payloadStorage.data(),
+        payloadWriter.bytesWritten()};
+
+    MessageHeaderV1 header{};
+    header.payloadEndian = 0u;
+    header.serviceId = weather::WeatherControlServiceId;
+    header.messageType = static_cast<std::uint16_t>(
+        weather::ControlMessageType::SetReportingInterval);
+    header.transactionId = context.transaction.id;
+    header.flags = MessageFlagIdempotent;
+
+    std::array<std::byte, 256> frameStorage{};
+    std::size_t frameSize = 0u;
+
+    const auto frameStatus = writeFrameV1(
+        pbook::MutableByteView{
+            frameStorage.data(),
+            frameStorage.size()},
+        header,
+        payload,
+        frameSize);
+
+    if (frameStatus != MessageFrameStatus::Ok)
+    {
+        return false;
+    }
+
+    return send_datagram(
+        context.udp->fd(),
+        pbook::ImmutableByteView{frameStorage.data(), frameSize},
+        context.destination);
+}
+
+void fail_transaction(AppContext& context, const char* reason) noexcept
+{
+    if (context.timer != nullptr)
+    {
+        context.timer->disarm();
+    }
+
+    context.transaction.state = TransactionState::Failed;
+    context.succeeded = false;
+    context.stopRequested = true;
+    std::cout << "Transaction failed: " << reason << "\n";
+}
+
+void exhaust_retry_budget(AppContext& context) noexcept
+{
+    std::cout << "Retry budget exhausted\n";
+    context.serviceAvailable = false;
+    context.transaction.state = TransactionState::Failed;
+    context.succeeded = false;
+    context.stopRequested = true;
+    std::cout << "Recovery: remote service marked unavailable\n";
+}
+
+bool arm_retry_delay(AppContext& context) noexcept
+{
+    if (context.timer == nullptr)
+    {
+        return false;
+    }
+
+    context.transaction.state = TransactionState::WaitingToRetry;
+    std::cout
+        << "Retrying after " << context.policy.retryDelay.count()
+        << " ms\n";
+
+    return context.timer->arm_oneshot(context.policy.retryDelay);
+}
+
+void schedule_retry(AppContext& context) noexcept
+{
+    if (context.transaction.attempts >= context.policy.maxAttempts)
+    {
+        exhaust_retry_budget(context);
+        return;
+    }
+
+    if (!arm_retry_delay(context))
+    {
+        fail_transaction(context, "could not arm retry timer");
+    }
+}
+
+bool send_attempt(AppContext& context) noexcept
+{
+    ++context.transaction.attempts;
+
+    std::cout
+        << "Sending transaction " << context.transaction.id
+        << ", attempt " << context.transaction.attempts
+        << "/" << context.policy.maxAttempts
+        << ": set reporting interval to "
+        << context.options.intervalMilliseconds << " ms\n";
+
+    if (!send_request_frame(context))
+    {
+        std::cerr << "Failed to send request";
+        if (errno != 0)
+        {
+            std::cerr << ": errno=" << errno;
+        }
+        std::cerr << "\n";
+        fail_transaction(context, "local transmission failure");
+        return false;
+    }
+
+    if (context.timer == nullptr ||
+        !context.timer->arm_oneshot(context.policy.responseTimeout))
+    {
+        fail_transaction(context, "could not arm response timer");
+        return false;
+    }
+
+    context.transaction.state = TransactionState::WaitingForResponse;
+    return true;
+}
+
 void on_signal(int signo, void* userData) noexcept
 {
     auto* context = static_cast<AppContext*>(userData);
@@ -191,12 +415,41 @@ void on_signal(int signo, void* userData) noexcept
     context->stopRequested = true;
 }
 
+void on_transaction_timer(std::uint64_t, void* userData) noexcept
+{
+    auto* context = static_cast<AppContext*>(userData);
+    if (context == nullptr)
+    {
+        return;
+    }
+
+    if (context->transaction.state == TransactionState::WaitingForResponse)
+    {
+        std::cout
+            << "Response timeout for transaction "
+            << context->transaction.id << "\n";
+        schedule_retry(*context);
+        return;
+    }
+
+    if (context->transaction.state == TransactionState::WaitingToRetry)
+    {
+        send_attempt(*context);
+    }
+}
+
 void on_response(pbook::ImmutableByteView bytes,
                  const sockaddr_in&,
                  void* userData) noexcept
 {
     auto* context = static_cast<AppContext*>(userData);
     if (context == nullptr)
+    {
+        return;
+    }
+
+    if (context->transaction.state != TransactionState::WaitingForResponse &&
+        context->transaction.state != TransactionState::WaitingToRetry)
     {
         return;
     }
@@ -217,11 +470,11 @@ void on_response(pbook::ImmutableByteView bytes,
         return;
     }
 
-    if (header.transactionId != context->transactionId)
+    if (header.transactionId != context->transaction.id)
     {
         std::cerr
             << "Ignoring response for transaction " << header.transactionId
-            << "; waiting for " << context->transactionId << "\n";
+            << "; waiting for " << context->transaction.id << "\n";
         return;
     }
 
@@ -236,8 +489,14 @@ void on_response(pbook::ImmutableByteView bytes,
             return;
         }
 
+        if (context->timer != nullptr)
+        {
+            context->timer->disarm();
+        }
+
         std::cout << "ACK " << header.transactionId << " received\n";
         std::cout << "Transaction succeeded\n";
+        context->transaction.state = TransactionState::Succeeded;
         context->succeeded = true;
         context->stopRequested = true;
         return;
@@ -259,70 +518,29 @@ void on_response(pbook::ImmutableByteView bytes,
             return;
         }
 
+        if (context->timer != nullptr)
+        {
+            context->timer->disarm();
+        }
+
         std::cout
             << "NACK " << header.transactionId
-            << " received, reason="
-            << static_cast<unsigned>(nack.reason) << "\n";
-        context->stopRequested = true;
+            << " received: " << nack_reason_name(nack.reason) << "\n";
+
+        if (nack.reason == weather::NackReason::Busy)
+        {
+            std::cout << "NACK is retryable\n";
+            schedule_retry(*context);
+        }
+        else
+        {
+            std::cout << "NACK is not retryable\n";
+            fail_transaction(*context, nack_reason_name(nack.reason));
+        }
         return;
     }
 
     std::cerr << "Ignoring unexpected response message type\n";
-}
-
-bool send_request(const Options& options,
-                  int socketFd,
-                  const sockaddr_in& destination) noexcept
-{
-    std::array<std::byte, 32> payloadStorage{};
-    pbook::BinaryWriteStream payloadWriter(
-        pbook::MutableByteView{
-            payloadStorage.data(),
-            payloadStorage.size()},
-        Endianness::Little);
-
-    const weather::SetReportingIntervalRequest request{
-        .intervalMilliseconds = options.intervalMilliseconds};
-
-    weather::writeSetReportingIntervalRequest(payloadWriter, request);
-    if (!payloadWriter.ok())
-    {
-        return false;
-    }
-
-    const pbook::ImmutableByteView payload{
-        payloadStorage.data(),
-        payloadWriter.bytesWritten()};
-
-    MessageHeaderV1 header{};
-    header.payloadEndian = 0u;
-    header.serviceId = weather::WeatherControlServiceId;
-    header.messageType = static_cast<std::uint16_t>(
-        weather::ControlMessageType::SetReportingInterval);
-    header.transactionId = options.transactionId;
-    header.flags = MessageFlagIdempotent;
-
-    std::array<std::byte, 256> frameStorage{};
-    std::size_t frameSize = 0u;
-
-    const auto frameStatus = writeFrameV1(
-        pbook::MutableByteView{
-            frameStorage.data(),
-            frameStorage.size()},
-        header,
-        payload,
-        frameSize);
-
-    if (frameStatus != MessageFrameStatus::Ok)
-    {
-        return false;
-    }
-
-    const pbook::ImmutableByteView frame{
-        frameStorage.data(),
-        frameSize};
-
-    return send_datagram(socketFd, frame, destination);
 }
 
 } // namespace
@@ -336,16 +554,21 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    sockaddr_in destination{};
-    if (!make_destination(options, destination))
+    AppContext context;
+    context.options = options;
+    context.policy.responseTimeout =
+        std::chrono::milliseconds{options.responseTimeoutMilliseconds};
+    context.policy.retryDelay =
+        std::chrono::milliseconds{options.retryDelayMilliseconds};
+    context.policy.maxAttempts = options.maxAttempts;
+    context.transaction.id = options.transactionId;
+
+    if (!make_destination(options, context.destination))
     {
         std::cerr << "Invalid IPv4 server address: "
                   << options.serverAddress << "\n";
         return 1;
     }
-
-    AppContext context{
-        .transactionId = options.transactionId};
 
     pbook::EpollReactor reactor{8};
     if (!reactor.open())
@@ -363,11 +586,22 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    context.udp = &udp;
+
     if (!reactor.add(udp))
     {
         std::cerr << "Failed to add UDP socket to epoll reactor\n";
         return 1;
     }
+
+    pbook::TimerFdSource transactionTimer{on_transaction_timer, &context};
+    if (!transactionTimer.open() || !reactor.add(transactionTimer))
+    {
+        std::cerr << "Failed to configure transaction timer\n";
+        return 1;
+    }
+
+    context.timer = &transactionTimer;
 
     pbook::SignalFdSource signalSource{
         std::initializer_list<int>{SIGINT, SIGTERM},
@@ -380,19 +614,8 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    std::cout
-        << "Sending transaction " << options.transactionId
-        << ": set reporting interval to "
-        << options.intervalMilliseconds << " ms\n";
-
-    if (!send_request(options, udp.fd(), destination))
+    if (!send_attempt(context))
     {
-        std::cerr << "Failed to send request";
-        if (errno != 0)
-        {
-            std::cerr << ": errno=" << errno;
-        }
-        std::cerr << "\n";
         return 1;
     }
 

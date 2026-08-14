@@ -1,20 +1,28 @@
-# Chapter 12 retry lab — first increment
+# Chapter 12 retry, timeout, and recovery lab
 
-This first increment establishes the normal BDS request/ACK path used by the
-retry, timeout, and recovery lab.
+This lab builds a bounded BDS request/response transaction over UDP using the
+readiness-based infrastructure introduced in Chapter 3 and the framing support
+introduced in Chapter 11.
 
-It deliberately does **not** retry yet. The point is to prove the baseline path
-before failure injection is added:
+The client sends one `SetReportingIntervalRequest` transaction at a time. The
+request uses the BDS transaction identifier and idempotent message flag. A
+one-shot `TimerFdSource` bounds the response wait and also schedules retry
+delays. The server can deliberately drop acknowledgments, return a retryable
+NACK, remain silent, and recognize a retried transaction that it already
+completed.
 
-1. `ch12_retry_client` encodes `SetReportingIntervalRequest` as a BDS frame.
-2. The request uses transaction ID 42 by default and sets the BDS idempotent flag.
-3. `ch12_retry_server` receives and validates the frame through the Chapter 3
-   `EpollReactor` and `UdpDatagramReceiver` machinery.
-4. The server applies the requested interval and returns a BDS ACK carrying the
-   same transaction ID.
-5. The client validates the ACK and completes the transaction.
+The default client policy is:
 
-## Build
+```text
+response timeout: 500 ms
+retry delay:      250 ms
+maximum attempts: 3
+```
+
+`maximum attempts` includes the original request. Three attempts therefore mean
+the original request plus at most two retries.
+
+## Build and install
 
 From this directory:
 
@@ -24,57 +32,61 @@ cmake --build build
 cmake --install build
 ```
 
-By default, the two executables and `run_retry_lab.sh` are installed in
-`~/bin`.
-```
-
-The directory is expected to be beside `Common` in the book repository.
-
-## Run
-
-For a quick end-to-end test after installation:
-
-```bash
-~/bin/run_retry_lab.sh
-```
-
-The script starts the server, runs one client transaction, prints both sides of
-the exchange, and cleans up the server.
-
-To run the two sides manually, start the server:
-
-```bash
-~/bin/ch12_retry_server
-```
-
-In another terminal, run the client:
-
-```bash
-~/bin/ch12_retry_client
-```
-
-Typical server output:
+By default, the executables and runner are installed in `~/bin`:
 
 ```text
-Chapter 12 retry server listening on UDP port 9100
-Transaction 42: reporting interval set to 5000 ms, idempotent=yes
-ACK 42 sent
+ch12_retry_client
+ch12_retry_server
+run_retry_lab.sh
 ```
 
-Typical client output:
-
-```text
-Sending transaction 42: set reporting interval to 5000 ms
-ACK 42 received
-Transaction succeeded
-```
-
-Useful options:
+## Run all scenarios
 
 ```bash
-./build/ch12_retry_server --port 9200
-./build/ch12_retry_client --server 127.0.0.1 --port 9200 --interval-ms 2500 --transaction 43
+run_retry_lab.sh
 ```
 
-The next increment adds a one-shot `timerfd`, bounded retry policy, and failure
-injection while leaving the Chapter 3 reactor architecture unchanged.
+The runner demonstrates five cases:
+
+1. Normal request/ACK.
+2. Lost ACK followed by timeout, retry, duplicate detection, and successful ACK.
+3. Retryable `Busy` NACK followed by a successful retry.
+4. Non-retryable `InvalidValue` NACK.
+5. Silence through all permitted attempts, followed by recovery that marks the
+   remote service unavailable.
+
+## Run manually
+
+Start the server in one terminal:
+
+```bash
+ch12_retry_server --mode drop-first-ack
+```
+
+Then run the client in another:
+
+```bash
+ch12_retry_client
+```
+
+Server modes are:
+
+```text
+normal
+drop-first-ack
+busy-once
+silent
+```
+
+Useful client options include:
+
+```text
+--timeout-ms <ms>
+--retry-delay-ms <ms>
+--max-attempts <count>
+--interval-ms <ms>
+--transaction <id>
+```
+
+The server accepts reporting intervals from 100 through 60000 milliseconds.
+Values outside that range produce a non-retryable `InvalidValue` NACK.

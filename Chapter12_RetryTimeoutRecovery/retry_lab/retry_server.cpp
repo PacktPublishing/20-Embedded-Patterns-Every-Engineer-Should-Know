@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Mark Wilson
 
 #include "BinaryReadStream.h"
+#include "BinaryWriteStream.h"
 #include "EpollReactor.h"
 #include "MessageFrame.h"
 #include "MessageHeader.h"
@@ -25,15 +26,31 @@
 namespace
 {
 
+enum class ServerMode
+{
+    Normal,
+    DropFirstAck,
+    BusyOnce,
+    Silent
+};
+
 struct Options
 {
     std::uint16_t port{9100};
+    ServerMode mode{ServerMode::Normal};
 };
 
 struct AppContext
 {
     bool stopRequested{false};
     std::uint32_t reportingIntervalMilliseconds{1000};
+
+    bool hasCompletedTransaction{false};
+    std::uint32_t completedTransactionId{};
+    bool firstAckDropped{false};
+    bool busyNackSent{false};
+
+    ServerMode mode{ServerMode::Normal};
     pbook::UdpDatagramReceiver* udp{nullptr};
 };
 
@@ -52,12 +69,74 @@ bool parse_u16(std::string_view text, std::uint16_t& out)
     return true;
 }
 
+bool parse_mode(std::string_view text, ServerMode& mode) noexcept
+{
+    if (text == "normal")
+    {
+        mode = ServerMode::Normal;
+        return true;
+    }
+
+    if (text == "drop-first-ack")
+    {
+        mode = ServerMode::DropFirstAck;
+        return true;
+    }
+
+    if (text == "busy-once")
+    {
+        mode = ServerMode::BusyOnce;
+        return true;
+    }
+
+    if (text == "silent")
+    {
+        mode = ServerMode::Silent;
+        return true;
+    }
+
+    return false;
+}
+
+const char* mode_name(ServerMode mode) noexcept
+{
+    switch (mode)
+    {
+        case ServerMode::Normal:
+            return "normal";
+        case ServerMode::DropFirstAck:
+            return "drop-first-ack";
+        case ServerMode::BusyOnce:
+            return "busy-once";
+        case ServerMode::Silent:
+            return "silent";
+    }
+
+    return "unknown";
+}
+
+const char* nack_reason_name(weather::NackReason reason) noexcept
+{
+    switch (reason)
+    {
+        case weather::NackReason::Busy:
+            return "busy";
+        case weather::NackReason::InvalidValue:
+            return "invalid value";
+        case weather::NackReason::UnsupportedOperation:
+            return "unsupported operation";
+    }
+
+    return "unknown";
+}
+
 void print_usage(const char* argv0)
 {
     std::cout
         << "Usage: " << argv0 << " [options]\n\n"
         << "Options:\n"
         << "  --port <port>    UDP port to listen on. Default: 9100\n"
+        << "  --mode <mode>    normal | drop-first-ack | busy-once | silent\n"
         << "  --help           Print this help\n";
 }
 
@@ -77,6 +156,14 @@ bool parse_options(int argc, char** argv, Options& options)
             if (i + 1 >= argc || !parse_u16(argv[++i], options.port))
             {
                 std::cerr << "Invalid --port value\n";
+                return false;
+            }
+        }
+        else if (arg == "--mode")
+        {
+            if (i + 1 >= argc || !parse_mode(argv[++i], options.mode))
+            {
+                std::cerr << "Invalid --mode value\n";
                 return false;
             }
         }
@@ -105,9 +192,11 @@ bool send_datagram(int fd,
     return sent == static_cast<ssize_t>(bytes.size());
 }
 
-bool send_ack(AppContext& context,
-              std::uint32_t transactionId,
-              const sockaddr_in& destination) noexcept
+bool send_response_frame(AppContext& context,
+                         std::uint32_t transactionId,
+                         weather::ControlMessageType messageType,
+                         pbook::ImmutableByteView payload,
+                         const sockaddr_in& destination) noexcept
 {
     if (context.udp == nullptr)
     {
@@ -117,8 +206,7 @@ bool send_ack(AppContext& context,
     MessageHeaderV1 header{};
     header.payloadEndian = 0u;
     header.serviceId = weather::WeatherControlServiceId;
-    header.messageType = static_cast<std::uint16_t>(
-        weather::ControlMessageType::Ack);
+    header.messageType = static_cast<std::uint16_t>(messageType);
     header.transactionId = transactionId;
 
     std::array<std::byte, 64> frameStorage{};
@@ -129,7 +217,7 @@ bool send_ack(AppContext& context,
             frameStorage.data(),
             frameStorage.size()},
         header,
-        pbook::ImmutableByteView{},
+        payload,
         frameSize);
 
     if (status != MessageFrameStatus::Ok)
@@ -139,10 +227,85 @@ bool send_ack(AppContext& context,
 
     return send_datagram(
         context.udp->fd(),
-        pbook::ImmutableByteView{
-            frameStorage.data(),
-            frameSize},
+        pbook::ImmutableByteView{frameStorage.data(), frameSize},
         destination);
+}
+
+bool send_ack(AppContext& context,
+              std::uint32_t transactionId,
+              const sockaddr_in& destination) noexcept
+{
+    return send_response_frame(
+        context,
+        transactionId,
+        weather::ControlMessageType::Ack,
+        pbook::ImmutableByteView{},
+        destination);
+}
+
+bool send_nack(AppContext& context,
+               std::uint32_t transactionId,
+               weather::NackReason reason,
+               const sockaddr_in& destination) noexcept
+{
+    std::array<std::byte, 8> payloadStorage{};
+    pbook::BinaryWriteStream writer(
+        pbook::MutableByteView{payloadStorage.data(), payloadStorage.size()},
+        Endianness::Little);
+
+    const weather::NackResponse response{.reason = reason};
+    weather::writeNackResponse(writer, response);
+    if (!writer.ok())
+    {
+        return false;
+    }
+
+    return send_response_frame(
+        context,
+        transactionId,
+        weather::ControlMessageType::Nack,
+        pbook::ImmutableByteView{payloadStorage.data(), writer.bytesWritten()},
+        destination);
+}
+
+void report_send_failure(const char* responseName,
+                         std::uint32_t transactionId) noexcept
+{
+    std::cerr << "Failed to send " << responseName << " " << transactionId;
+    if (errno != 0)
+    {
+        std::cerr << ": errno=" << errno;
+    }
+    std::cerr << "\n";
+}
+
+void send_ack_or_report(AppContext& context,
+                        std::uint32_t transactionId,
+                        const sockaddr_in& destination) noexcept
+{
+    if (!send_ack(context, transactionId, destination))
+    {
+        report_send_failure("ACK", transactionId);
+        return;
+    }
+
+    std::cout << "ACK " << transactionId << " sent\n";
+}
+
+void send_nack_or_report(AppContext& context,
+                         std::uint32_t transactionId,
+                         weather::NackReason reason,
+                         const sockaddr_in& destination) noexcept
+{
+    if (!send_nack(context, transactionId, reason, destination))
+    {
+        report_send_failure("NACK", transactionId);
+        return;
+    }
+
+    std::cout
+        << "NACK " << transactionId << " sent: "
+        << nack_reason_name(reason) << "\n";
 }
 
 void on_signal(int signo, void* userData) noexcept
@@ -194,7 +357,41 @@ void on_request(pbook::ImmutableByteView bytes,
 
     if (messageType != weather::ControlMessageType::SetReportingInterval)
     {
-        std::cerr << "Ignoring unsupported request type\n";
+        send_nack_or_report(
+            *context,
+            header.transactionId,
+            weather::NackReason::UnsupportedOperation,
+            source);
+        return;
+    }
+
+    // Only one transaction is outstanding in this lab. Remembering the most
+    // recently completed transaction is therefore enough to demonstrate
+    // duplicate detection without building a transaction cache.
+    if (context->hasCompletedTransaction &&
+        header.transactionId == context->completedTransactionId)
+    {
+        std::cout << "Duplicate transaction " << header.transactionId << "\n";
+        std::cout << "Operation already completed; not processing again\n";
+
+        if (context->mode == ServerMode::Silent)
+        {
+            std::cout << "Response suppressed (silent mode)\n";
+            return;
+        }
+
+        send_ack_or_report(*context, header.transactionId, source);
+        return;
+    }
+
+    if (context->mode == ServerMode::BusyOnce && !context->busyNackSent)
+    {
+        context->busyNackSent = true;
+        send_nack_or_report(
+            *context,
+            header.transactionId,
+            weather::NackReason::Busy,
+            source);
         return;
     }
 
@@ -210,7 +407,20 @@ void on_request(pbook::ImmutableByteView bytes,
         return;
     }
 
+    if (request.intervalMilliseconds < 100u ||
+        request.intervalMilliseconds > 60'000u)
+    {
+        send_nack_or_report(
+            *context,
+            header.transactionId,
+            weather::NackReason::InvalidValue,
+            source);
+        return;
+    }
+
     context->reportingIntervalMilliseconds = request.intervalMilliseconds;
+    context->hasCompletedTransaction = true;
+    context->completedTransactionId = header.transactionId;
 
     std::cout
         << "Transaction " << header.transactionId
@@ -219,18 +429,21 @@ void on_request(pbook::ImmutableByteView bytes,
         << ", idempotent=" << (isIdempotent(header) ? "yes" : "no")
         << "\n";
 
-    if (!send_ack(*context, header.transactionId, source))
+    if (context->mode == ServerMode::DropFirstAck &&
+        !context->firstAckDropped)
     {
-        std::cerr << "Failed to send ACK " << header.transactionId;
-        if (errno != 0)
-        {
-            std::cerr << ": errno=" << errno;
-        }
-        std::cerr << "\n";
+        context->firstAckDropped = true;
+        std::cout << "Dropping ACK " << header.transactionId << "\n";
         return;
     }
 
-    std::cout << "ACK " << header.transactionId << " sent\n";
+    if (context->mode == ServerMode::Silent)
+    {
+        std::cout << "Response suppressed (silent mode)\n";
+        return;
+    }
+
+    send_ack_or_report(*context, header.transactionId, source);
 }
 
 } // namespace
@@ -245,6 +458,7 @@ int main(int argc, char** argv)
     }
 
     AppContext context;
+    context.mode = options.mode;
 
     pbook::EpollReactor reactor{8};
     if (!reactor.open())
@@ -282,7 +496,8 @@ int main(int argc, char** argv)
 
     std::cout
         << "Chapter 12 retry server listening on UDP port "
-        << udp.local_port() << "\n";
+        << udp.local_port()
+        << ", mode=" << mode_name(options.mode) << "\n";
 
     while (!context.stopRequested)
     {
