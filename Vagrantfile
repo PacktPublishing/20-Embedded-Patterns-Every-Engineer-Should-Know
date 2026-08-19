@@ -7,6 +7,9 @@ Vagrant.configure("2") do |config|
 
   config.vm.synced_folder ".", "/workspace"
 
+  # Chapter 14 PTP network
+  config.vm.network "private_network", ip: "192.168.56.15"
+
   config.vm.provider "virtualbox" do |vb|
     vb.name = "Packt-HFD"
     vb.memory = 4096
@@ -29,6 +32,8 @@ Vagrant.configure("2") do |config|
       stress-ng \
       socat \
       netcat-openbsd \
+      linuxptp \
+      ethtool \
       python3 \
       python3-pip \
       python3-numpy \
