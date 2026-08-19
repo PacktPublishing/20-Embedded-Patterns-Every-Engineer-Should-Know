@@ -9,23 +9,20 @@ using namespace std::chrono;
 
 static void print_wall_clock(system_clock::time_point tp)
 {
-    const auto seconds =
-        time_point_cast<std::chrono::seconds>(tp);
-    const auto ns =
-        duration_cast<nanoseconds>(tp - seconds).count();
+    const auto seconds = time_point_cast<std::chrono::seconds>(tp);
+    const auto ms =
+        duration_cast<milliseconds>(tp - seconds).count();
 
-    const std::time_t t =
-        system_clock::to_time_t(tp);
+    const std::time_t t = system_clock::to_time_t(seconds);
 
     std::tm tm{};
     gmtime_r(&t, &tm);
 
-    std::cout << std::put_time(&tm, "%Y-%m-%d %H:%M:%S")
+    std::cout << std::put_time(&tm, "%H:%M:%S")
               << '.'
-              << std::setw(9)
+              << std::setw(3)
               << std::setfill('0')
-              << ns
-              << " UTC";
+              << ms;
 }
 
 int main(int argc, char* argv[])
@@ -34,15 +31,14 @@ int main(int argc, char* argv[])
 
     if (argc > 1)
     {
-        period = milliseconds{std::strtol(argv[1], nullptr, 10)};
+        period = milliseconds{
+            std::strtol(argv[1], nullptr, 10)};
     }
 
     const auto monotonicStart = steady_clock::now();
     auto nextSample = monotonicStart;
 
-    std::cout
-        << "Wall clock (UTC)                  "
-        << "Monotonic elapsed\n";
+    std::cout << "Wall UTC       Monotonic\n";
 
     while (true)
     {
@@ -50,16 +46,17 @@ int main(int argc, char* argv[])
         const auto steadyNow = steady_clock::now();
 
         const auto elapsed =
-            duration_cast<milliseconds>(
-                steadyNow - monotonicStart);
+            duration<double>(steadyNow - monotonicStart).count();
 
         print_wall_clock(wallNow);
 
         std::cout << "    "
-                  << std::setw(10)
+                  << std::fixed
+                  << std::setprecision(3)
+                  << std::setw(8)
                   << std::setfill(' ')
-                  << elapsed.count()
-                  << " ms\n";
+                  << elapsed
+                  << " s\n";
 
         nextSample += period;
         std::this_thread::sleep_until(nextSample);
