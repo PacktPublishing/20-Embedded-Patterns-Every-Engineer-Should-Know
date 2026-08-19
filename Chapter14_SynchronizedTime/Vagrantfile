@@ -1,6 +1,6 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/jammy64"
-  config.vm.hostname = "ptp-grandmaster"
+  config.vm.hostname = "chronos"
 
   # Host-only network between the Ubuntu host and this VM.
   config.vm.network "private_network",
