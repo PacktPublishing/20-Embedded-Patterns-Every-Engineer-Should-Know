@@ -2,27 +2,85 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project(Chapter14SynchronizedTime LANGUAGES CXX)
 
-add_executable(ch14_clock_monitor
-    clock_monitor.cpp
+if(NOT TARGET Common)
+    add_subdirectory(
+        "${CMAKE_CURRENT_LIST_DIR}/../Common"
+        "${CMAKE_CURRENT_BINARY_DIR}/Common-build"
+    )
+endif()
+
+find_package(Threads REQUIRED)
+
+function(ch14_configure_target target)
+    target_compile_features(${target}
+        PRIVATE
+            cxx_std_20
+    )
+
+    target_compile_options(${target}
+        PRIVATE
+            -Wall
+            -Wextra
+            -pedantic
+    )
+endfunction()
+
+# Lab 1 clock monitor.
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/clock_monitor.cpp")
+    add_executable(ch14_clock_monitor
+        clock_monitor.cpp
+    )
+    ch14_configure_target(ch14_clock_monitor)
+endif()
+
+# Lab 2: Chronos remote measurement simulator.
+add_executable(ch14_wind_speed_tx
+    wind_speed_tx.cpp
+    SynchronizedMeasurementProtocol.h
+)
+ch14_configure_target(ch14_wind_speed_tx)
+target_link_libraries(ch14_wind_speed_tx
+    PRIVATE
+        CommonBds
 )
 
-target_compile_features(ch14_clock_monitor
-    PRIVATE
-        cxx_std_20
+# Lab 2: Dev UDP receiver + local acquisition + timestamp fusion.
+add_executable(ch14_synchronized_fusion
+    synchronized_fusion.cpp
+    SynchronizedMeasurementProtocol.h
 )
-
-target_compile_options(ch14_clock_monitor
+ch14_configure_target(ch14_synchronized_fusion)
+target_link_libraries(ch14_synchronized_fusion
     PRIVATE
-        -Wall
-        -Wextra
-        -pedantic
+        CommonBds
+        Threads::Threads
 )
 
 set(CH14_INSTALL_BINDIR "$ENV{HOME}/bin"
-    CACHE PATH "Install directory for Chapter 14 demo executables"
+    CACHE PATH "Install directory for Chapter 14 demo executables and scripts"
 )
 
-install(TARGETS
-    ch14_clock_monitor
+set(CH14_INSTALL_TARGETS
+    ch14_wind_speed_tx
+    ch14_synchronized_fusion
+)
+
+if(TARGET ch14_clock_monitor)
+    list(APPEND CH14_INSTALL_TARGETS ch14_clock_monitor)
+endif()
+
+install(TARGETS ${CH14_INSTALL_TARGETS}
     RUNTIME DESTINATION "${CH14_INSTALL_BINDIR}"
 )
+
+install(PROGRAMS
+    "${CMAKE_CURRENT_LIST_DIR}/run_measurement_lab.sh"
+    DESTINATION "${CH14_INSTALL_BINDIR}"
+)
+
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/run_ptp_lab.sh")
+    install(PROGRAMS
+        "${CMAKE_CURRENT_LIST_DIR}/run_ptp_lab.sh"
+        DESTINATION "${CH14_INSTALL_BINDIR}"
+    )
+endif()
