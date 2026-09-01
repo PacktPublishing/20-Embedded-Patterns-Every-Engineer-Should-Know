@@ -33,7 +33,7 @@ REMOTE_PERIOD_MS="100"
 # Chronos:
 #   Chapter14_SynchronizedTime -> /vagrant
 #
-CHRONOS_TX="/vagrant/build/ch14_wind_speed_tx"
+CHRONOS_TX="/vagrant/build/ch14_temperature_tx"
 DEV_FUSION="/workspace/Chapter14_SynchronizedTime/build/ch14_synchronized_fusion"
 
 
@@ -73,9 +73,9 @@ check_environment()
 
     local missing=0
 
-    if [[ ! -x "${CHAPTER_DIR}/build/ch14_wind_speed_tx" ]]; then
+    if [[ ! -x "${CHAPTER_DIR}/build/ch14_temperature_tx" ]]; then
         echo "Missing executable:"
-        echo "  ${CHAPTER_DIR}/build/ch14_wind_speed_tx"
+        echo "  ${CHAPTER_DIR}/build/ch14_temperature_tx"
         missing=1
     fi
 
@@ -107,7 +107,7 @@ kill_remote_processes()
     # intentionally quiet.
     #
     vagrant_ssh "${CHRONOS_DIR}" \
-        "pkill -f 'ch14_wind_speed_tx' >/dev/null 2>&1 || true; \
+        "pkill -f 'ch14_temperature_tx' >/dev/null 2>&1 || true; \
          sudo pkill -x ptp4l >/dev/null 2>&1 || true" \
         >/dev/null 2>&1 || true
 
@@ -296,11 +296,11 @@ create_tmux_lab()
 
     tmux select-pane \
         -t "${chronos_pane}" \
-        -T "CHRONOS - REMOTE WIND SPEED"
+        -T "CHRONOS - REMOTE TEMPERATURE"
 
     tmux select-pane \
         -t "${dev_pane}" \
-        -T "DEV - SYNCHRONIZED FUSION"
+        -T "DEV - SYNCHRONIZED MEASUREMENTS"
 
     tmux send-keys \
         -t "${chronos_pane}" \

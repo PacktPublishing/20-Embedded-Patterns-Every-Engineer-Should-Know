@@ -162,7 +162,7 @@ void receiverLoop(
 
         if (header.serviceId != ch14::SynchronizedMeasurementServiceId ||
             header.messageType != static_cast<std::uint16_t>(
-                ch14::MeasurementMessageType::WindSpeed))
+                ch14::MeasurementMessageType::Temperature))
         {
             continue;
         }
@@ -171,8 +171,8 @@ void receiverLoop(
             payload,
             payloadEndianFromHeader(header.payloadEndian));
 
-        ch14::WindSpeed speed{};
-        ch14::readWindSpeed(reader, speed);
+        ch14::Temperature temperature{};
+        ch14::readTemperature(reader, temperature);
 
         if (!reader.ok() || reader.remaining() != 0u)
         {
@@ -181,7 +181,7 @@ void receiverLoop(
 
         // One producer (this receiver) and one consumer (fusion thread).
         // A full queue drops the newest measurement rather than blocking input.
-        remoteQueue.tryPush(ch14::Measurement{speed});
+        remoteQueue.tryPush(ch14::Measurement{temperature});
     }
 }
 
@@ -205,13 +205,13 @@ void localAcquisitionLoop(
 
         ++sequence;
 
-        const double direction =
-            220.0 + static_cast<double>(sequence % 30u) * 0.5;
+        const double pressure =
+            1012.0 + static_cast<double>(sequence % 30u) * 0.10;
 
-        const ch14::WindDirection measurement{
+        const ch14::Pressure measurement{
             .sequence = sequence,
             .eventTimeNs = ch14::synchronizedTimeNowNs(),
-            .degrees = direction
+            .hectopascals = pressure
         };
 
         // One producer (this acquisition thread) and one consumer (fusion).
@@ -227,17 +227,17 @@ void fusionLoop(
     const std::int64_t matchWindowNs =
         static_cast<std::int64_t>(matchWindowMs) * 1'000'000LL;
 
-    std::optional<ch14::WindSpeed> latestSpeed;
-    std::optional<ch14::WindDirection> latestDirection;
+    std::optional<ch14::Temperature> latestTemperature;
+    std::optional<ch14::Pressure> latestPressure;
 
     while (!stopRequested)
     {
-        // Keep only the newest remote wind-speed measurement available.
+        // Keep only the newest remote temperature measurement available.
         while (auto item = remoteQueue.tryPop())
         {
-            if (const auto* speed = std::get_if<ch14::WindSpeed>(&*item))
+            if (const auto* temperature = std::get_if<ch14::Temperature>(&*item))
             {
-                latestSpeed = *speed;
+                latestTemperature = *temperature;
             }
         }
 
@@ -248,42 +248,42 @@ void fusionLoop(
             continue;
         }
 
-        if (const auto* direction =
-                std::get_if<ch14::WindDirection>(&*localItem))
+        if (const auto* pressure =
+                std::get_if<ch14::Pressure>(&*localItem))
         {
-            latestDirection = *direction;
+            latestPressure = *pressure;
         }
         else
         {
             continue;
         }
 
-        if (!latestSpeed || !latestDirection)
+        if (!latestTemperature || !latestPressure)
         {
-            std::cout << "Waiting for first remote wind-speed measurement...\n";
+            std::cout << "Waiting for first remote temperature measurement...\n";
             continue;
         }
 
         const std::int64_t deltaNs = absoluteDifference(
-            latestSpeed->eventTimeNs,
-            latestDirection->eventTimeNs);
+            latestTemperature->eventTimeNs,
+            latestPressure->eventTimeNs);
 
         const double deltaMs =
             static_cast<double>(deltaNs) / 1'000'000.0;
 
         const bool match = deltaNs <= matchWindowNs;
 
-        std::cout << "REMOTE  speed=" << std::fixed << std::setprecision(2)
-                  << std::setw(5) << latestSpeed->metersPerSecond << " m/s"
+        std::cout << "REMOTE  temp =" << std::fixed << std::setprecision(2)
+                  << std::setw(6) << latestTemperature->degreesCelsius << " C"
                   << "  t=";
-        printTime(latestSpeed->eventTimeNs);
-        std::cout << "  seq=" << latestSpeed->sequence << '\n';
+        printTime(latestTemperature->eventTimeNs);
+        std::cout << "  seq=" << latestTemperature->sequence << '\n';
 
-        std::cout << "LOCAL   dir  =" << std::fixed << std::setprecision(1)
-                  << std::setw(5) << latestDirection->degrees << " deg"
+        std::cout << "LOCAL   press=" << std::fixed << std::setprecision(1)
+                  << std::setw(6) << latestPressure->hectopascals << " hPa"
                   << "  t=";
-        printTime(latestDirection->eventTimeNs);
-        std::cout << "  seq=" << latestDirection->sequence << '\n';
+        printTime(latestPressure->eventTimeNs);
+        std::cout << "  seq=" << latestPressure->sequence << '\n';
 
         std::cout << "FUSION  delta=" << std::fixed << std::setprecision(3)
                   << std::setw(7) << deltaMs << " ms  "
@@ -359,8 +359,8 @@ int main(int argc, char* argv[])
     BoundedQueue<ch14::Measurement, QueueCapacity> localQueue;
 
     std::cout << "Dev synchronized-fusion application\n"
-              << "UDP wind speed:   port " << udpPort << '\n'
-              << "Local direction:  every " << localPeriodMs << " ms\n"
+              << "UDP temperature:  port " << udpPort << '\n'
+              << "Local pressure:    every " << localPeriodMs << " ms\n"
               << "Match window:     +/- " << matchWindowMs << " ms\n"
               << "Both event timestamps use PTP-disciplined system_clock.\n\n";
 

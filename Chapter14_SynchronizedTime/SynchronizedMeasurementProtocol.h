@@ -17,24 +17,24 @@ inline constexpr std::uint16_t SynchronizedMeasurementServiceId = 14u;
 
 enum class MeasurementMessageType : std::uint16_t
 {
-    WindSpeed = 1u
+    Temperature = 1u
 };
 
-struct WindSpeed
+struct Temperature
 {
     std::uint32_t sequence{};
     std::int64_t eventTimeNs{};
-    double metersPerSecond{};
+    double degreesCelsius{};
 };
 
-struct WindDirection
+struct Pressure
 {
     std::uint32_t sequence{};
     std::int64_t eventTimeNs{};
-    double degrees{};
+    double hectopascals{};
 };
 
-using Measurement = std::variant<WindSpeed, WindDirection>;
+using Measurement = std::variant<Temperature, Pressure>;
 
 inline std::int64_t synchronizedTimeNowNs() noexcept
 {
@@ -43,24 +43,24 @@ inline std::int64_t synchronizedTimeNowNs() noexcept
         .count();
 }
 
-inline pbook::BinaryWriteStream& writeWindSpeed(
+inline pbook::BinaryWriteStream& writeTemperature(
     pbook::BinaryWriteStream& writer,
-    const WindSpeed& measurement) noexcept
+    const Temperature& measurement) noexcept
 {
     return writer
         .writeUInt32(measurement.sequence)
         .writeInt64(measurement.eventTimeNs)
-        .writeDouble(measurement.metersPerSecond);
+        .writeDouble(measurement.degreesCelsius);
 }
 
-inline pbook::BinaryReadStream& readWindSpeed(
+inline pbook::BinaryReadStream& readTemperature(
     pbook::BinaryReadStream& reader,
-    WindSpeed& measurement) noexcept
+    Temperature& measurement) noexcept
 {
     return reader
         .readUInt32(measurement.sequence)
         .readInt64(measurement.eventTimeNs)
-        .readDouble(measurement.metersPerSecond);
+        .readDouble(measurement.degreesCelsius);
 }
 
 } // namespace ch14

@@ -34,12 +34,12 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/clock_monitor.cpp")
 endif()
 
 # Lab 2: Chronos remote measurement simulator.
-add_executable(ch14_wind_speed_tx
-    wind_speed_tx.cpp
+add_executable(ch14_temperature_tx
+    temperature_tx.cpp
     SynchronizedMeasurementProtocol.h
 )
-ch14_configure_target(ch14_wind_speed_tx)
-target_link_libraries(ch14_wind_speed_tx
+ch14_configure_target(ch14_temperature_tx)
+target_link_libraries(ch14_temperature_tx
     PRIVATE
         CommonBds
 )
@@ -61,7 +61,7 @@ set(CH14_INSTALL_BINDIR "$ENV{HOME}/bin"
 )
 
 set(CH14_INSTALL_TARGETS
-    ch14_wind_speed_tx
+    ch14_temperature_tx
     ch14_synchronized_fusion
 )
 
