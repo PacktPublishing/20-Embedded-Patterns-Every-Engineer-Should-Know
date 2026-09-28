@@ -6,6 +6,7 @@ include(CTest)
 
 add_executable(ch19_weather_device
     src/main.cpp
+    include/AnomalyDetection.h
 )
 
 target_include_directories(ch19_weather_device
